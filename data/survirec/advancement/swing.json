@@ -1,0 +1,23 @@
+{
+  "criteria": {
+    "hit": {
+      "trigger": "minecraft:player_hurt_entity"
+    },
+    "block": {
+      "trigger": "minecraft:any_block_use"
+    },
+    "entity": {
+      "trigger": "minecraft:player_interacted_with_entity"
+    }
+  },
+  "requirements": [
+    [
+      "hit",
+      "block",
+      "entity"
+    ]
+  ],
+  "rewards": {
+    "function": "survirec:r/adv"
+  }
+}
