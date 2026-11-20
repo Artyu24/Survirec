@@ -1,0 +1,2 @@
+$execute positioned $(x) $(y) $(z) run function survirec:v1/private/vault/here
+$setblock $(x) $(y) $(z) $(b) strict

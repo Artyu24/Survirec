@@ -1,0 +1,7 @@
+tellraw @s {text:"══ SURVIREC · AIDE ══",color:"gold"}
+tellraw @s [{text:"   "},{text:"[🎬 Ouvrir le menu]",color:"gold",click_event:{action:"run_command",command:"/function #survirec:v1/menu"},hover_event:{action:"show_text",value:"Interface Survirec"}},{text:"  "},{text:"[Recevoir l'objet]",color:"yellow",click_event:{action:"run_command",command:"/function #survirec:v1/menu_item"},hover_event:{action:"show_text",value:"Objet qui ouvre le menu d'un clic droit"}}]
+tellraw @s [{text:"   "},{text:"[1] Enregistrer",color:"aqua",click_event:{action:"run_command",command:"/function survirec:v1/private/help/p1"},hover_event:{action:"show_text",value:"Ouvrir"}}]
+tellraw @s [{text:"   "},{text:"[2] Lancer",color:"aqua",click_event:{action:"run_command",command:"/function survirec:v1/private/help/p2"},hover_event:{action:"show_text",value:"Ouvrir"}}]
+tellraw @s [{text:"   "},{text:"[3] Champs",color:"aqua",click_event:{action:"run_command",command:"/function survirec:v1/private/help/p3"},hover_event:{action:"show_text",value:"Ouvrir"}}]
+tellraw @s [{text:"   "},{text:"[4] Épreuve",color:"aqua",click_event:{action:"run_command",command:"/function survirec:v1/private/help/p4"},hover_event:{action:"show_text",value:"Ouvrir"}}]
+tellraw @s [{text:"   "},{text:"[5] Gérer",color:"aqua",click_event:{action:"run_command",command:"/function survirec:v1/private/help/p5"},hover_event:{action:"show_text",value:"Ouvrir"}}]

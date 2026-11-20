@@ -1,0 +1,16 @@
+{
+  "values": [
+    {
+      "id": "minecraft:iron_sword",
+      "required": false
+    },
+    {
+      "id": "minecraft:mace",
+      "required": false
+    },
+    {
+      "id": "minecraft:netherite_pickaxe",
+      "required": false
+    }
+  ]
+}

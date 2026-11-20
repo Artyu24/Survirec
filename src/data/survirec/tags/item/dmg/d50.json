@@ -1,0 +1,16 @@
+{
+  "values": [
+    {
+      "id": "minecraft:stone_sword",
+      "required": false
+    },
+    {
+      "id": "minecraft:copper_sword",
+      "required": false
+    },
+    {
+      "id": "minecraft:diamond_pickaxe",
+      "required": false
+    }
+  ]
+}

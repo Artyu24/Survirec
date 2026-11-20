@@ -1,0 +1,10 @@
+{
+  "criteria": {
+    "x": {
+      "trigger": "minecraft:placed_block"
+    }
+  },
+  "rewards": {
+    "function": "survirec:v1/private/r/adv_place"
+  }
+}

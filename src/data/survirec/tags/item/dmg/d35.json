@@ -1,0 +1,12 @@
+{
+  "values": [
+    {
+      "id": "minecraft:stone_shovel",
+      "required": false
+    },
+    {
+      "id": "minecraft:copper_shovel",
+      "required": false
+    }
+  ]
+}

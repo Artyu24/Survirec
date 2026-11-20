@@ -1,0 +1,95 @@
+{
+  "type": "minecraft:multi_action",
+  "title": {
+    "text": "🎥 Nouvel enregistrement",
+    "color": "gold"
+  },
+  "body": [
+    {
+      "type": "minecraft:plain_message",
+      "width": 300,
+      "contents": {
+        "text": "Nom : lettres, chiffres et _ uniquement. Un même nom remplace l'ancien enregistrement.",
+        "color": "gray"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "type": "minecraft:text",
+      "key": "name",
+      "label": {
+        "text": "Nom"
+      },
+      "initial": "walk",
+      "max_length": 32,
+      "width": 200
+    },
+    {
+      "type": "minecraft:single_option",
+      "key": "every",
+      "label": {
+        "text": "Précision"
+      },
+      "width": 200,
+      "options": [
+        {
+          "id": "2",
+          "display": {
+            "text": "Précise (2)"
+          }
+        },
+        {
+          "id": "4",
+          "display": {
+            "text": "Normale (4)"
+          },
+          "initial": true
+        },
+        {
+          "id": "8",
+          "display": {
+            "text": "Légère (8)"
+          }
+        }
+      ]
+    },
+    {
+      "type": "minecraft:text",
+      "key": "group",
+      "label": {
+        "text": "Groupe (optionnel)"
+      },
+      "initial": "",
+      "max_length": 32,
+      "width": 200
+    }
+  ],
+  "columns": 1,
+  "actions": [
+    {
+      "label": {
+        "text": "▶ Démarrer",
+        "color": "green"
+      },
+      "width": 200,
+      "action": {
+        "type": "minecraft:dynamic/run_command",
+        "template": "function #survirec:v1/start {with:{name:\"$(name)\",every:$(every),group:\"$(group)\"}}"
+      },
+      "tooltip": {
+        "text": "Avec un groupe, l'enregistrement attend le prochain cycle du groupe"
+      }
+    }
+  ],
+  "exit_action": {
+    "label": {
+      "text": "Retour"
+    },
+    "width": 200,
+    "action": {
+      "type": "minecraft:show_dialog",
+      "dialog": "survirec:menu"
+    }
+  }
+}

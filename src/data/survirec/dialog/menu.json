@@ -1,0 +1,150 @@
+{
+  "type": "minecraft:multi_action",
+  "title": {
+    "text": "Survirec",
+    "color": "gold",
+    "bold": true
+  },
+  "body": [
+    {
+      "type": "minecraft:plain_message",
+      "width": 300,
+      "contents": {
+        "text": "Enregistre tes mouvements et fais-les rejouer par des mannequins.",
+        "color": "gray"
+      }
+    }
+  ],
+  "columns": 2,
+  "actions": [
+    {
+      "label": {
+        "text": "🎥 Nouvel enregistrement",
+        "color": "green"
+      },
+      "width": 150,
+      "action": {
+        "type": "minecraft:show_dialog",
+        "dialog": "survirec:record"
+      },
+      "tooltip": {
+        "text": "Choisir un nom et démarrer"
+      }
+    },
+    {
+      "label": {
+        "text": "🏁 Épreuve",
+        "color": "green"
+      },
+      "width": 150,
+      "action": {
+        "type": "minecraft:show_dialog",
+        "dialog": "survirec:challenge"
+      },
+      "tooltip": {
+        "text": "Enregistrement chronométré, rejoué par ton double"
+      }
+    },
+    {
+      "label": {
+        "text": "■ Arrêter",
+        "color": "red"
+      },
+      "width": 150,
+      "action": {
+        "type": "minecraft:run_command",
+        "command": "function #survirec:v1/stop"
+      },
+      "tooltip": {
+        "text": "Termine ton enregistrement et affiche les boutons de copie"
+      }
+    },
+    {
+      "label": {
+        "text": "↺ Arrêter + retour",
+        "color": "red"
+      },
+      "width": 150,
+      "action": {
+        "type": "minecraft:run_command",
+        "command": "function #survirec:v1/stop_loop"
+      },
+      "tooltip": {
+        "text": "Termine et ajoute un retour au départ (boucle propre)"
+      }
+    },
+    {
+      "label": {
+        "text": "✖ Annuler",
+        "color": "red"
+      },
+      "width": 150,
+      "action": {
+        "type": "minecraft:run_command",
+        "command": "function #survirec:v1/abort"
+      },
+      "tooltip": {
+        "text": "Annule ton enregistrement en cours"
+      }
+    },
+    {
+      "label": {
+        "text": "📂 Mes enregistrements"
+      },
+      "width": 150,
+      "action": {
+        "type": "minecraft:run_command",
+        "command": "function #survirec:v1/records"
+      },
+      "tooltip": {
+        "text": "Rejouer, recopier ou supprimer tes séquences"
+      }
+    },
+    {
+      "label": {
+        "text": "📋 Commandes à copier"
+      },
+      "width": 150,
+      "action": {
+        "type": "minecraft:run_command",
+        "command": "function #survirec:v1/commands"
+      },
+      "tooltip": {
+        "text": "Les commandes utiles, prêtes à coller"
+      }
+    },
+    {
+      "label": {
+        "text": "❓ Aide"
+      },
+      "width": 150,
+      "action": {
+        "type": "minecraft:run_command",
+        "command": "function #survirec:v1/help"
+      },
+      "tooltip": {
+        "text": "Aide détaillée dans le chat"
+      }
+    },
+    {
+      "label": {
+        "text": "📖 README (GitHub)",
+        "color": "aqua"
+      },
+      "width": 304,
+      "action": {
+        "type": "minecraft:open_url",
+        "url": "https://github.com/Artyu24/Survirec#readme"
+      },
+      "tooltip": {
+        "text": "Documentation complète"
+      }
+    }
+  ],
+  "exit_action": {
+    "label": {
+      "text": "Fermer"
+    },
+    "width": 200
+  }
+}

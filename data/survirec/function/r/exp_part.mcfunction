@@ -1,1 +1,0 @@
-$tellraw @s [{text:"[Survirec] ",color:"gray"},{text:"[Copier $(j)/$(m)]",color:"yellow",bold:true,click_event:{action:"copy_to_clipboard",value:'function survirec:part {name:"$(name)",f:$(f),d:$(d)}'},hover_event:{action:"show_text",value:"Clique pour copier, puis colle dans un command block"}},{text:"  → command block $(j) · $(k)",color:"aqua"}]

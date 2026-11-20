@@ -1,0 +1,105 @@
+# Changelog
+
+## 1.0.0
+- First stable release. From now on, the public API (`#survirec:v1/...` function tags, their fields and the sequence format) stays backward compatible: new features are minor versions, fixes are patches.
+
+## 0.12.1
+- Fixed: the `redstone` pulse was placed right on top of the launching command block and restarted the playback; it is now 2 blocks above (one block gap).
+
+## 0.12.0
+- Changed: the challenge menu takes any duration (text field) and copies the command for a command block instead of starting the challenge.
+- Added: `#survirec:v1/challenge_cmd`, shows a copy button for a challenge command.
+- Added: `redstone` playback field (default `0`): at the end of every loop (or group cycle), a redstone block pulse on top of the command block that started the playback.
+
+## 0.11.1
+- Fixed: the hidden dimension no longer fills up. An entity copies each block only once (its original state) and reuses that copy at every loop; the copies are cleared and reused when the entity disappears. While recording, the same area is kept only once and cleared as soon as the recording ends.
+- Changed: `#survirec:v1/kill_all` also resets the playback area of the hidden dimension.
+
+## 0.11.0
+- Changed (performance): the visible position of a playing entity is updated every `move_every` ticks (default 2), entities taking turns. Timing, swings and actions stay exact.
+- Changed (performance): the per-playback `range` is checked every 4 ticks instead of 2.
+- Added: `#survirec:v1/settings {with:{range,move_every}}`.
+
+## 0.10.1
+- Fixed: blocks broken, placed or used while recording are put back as soon as the recording ends or is interrupted (stop, cancel, disconnection, `reset`), so the entity is the one doing it on playback.
+- Fixed: a button or lever pressed by an entity now powers what is behind its support block (command block, redstone), like a real player.
+
+## 0.10.0
+- Added: actions are recorded and played back: hitting entities (player damage of the held weapon), pressing buttons and levers, opening doors, trapdoors and fence gates (redstone reacts), placing blocks (with orientation, both halves of doors and beds) and breaking blocks (no drops).
+- Added: `restore` playback field: blocks changed by an entity are copied into the hidden `survirec:vault` dimension and put back at every loop (`1`, default), also when the entity ends (`2`), or never (`0`).
+- Added: `hit_players` playback field (default `0`).
+- Added: `tools/gen_blocks.py` and `tools/blocks.txt`, generating the block recognition.
+
+## 0.9.0
+- Added: `tp_back` in `#survirec:v1/challenge` (default `1`): at the end of the recording, the player is teleported back to their start position and rotation. `0` keeps them where they are. Also in the challenge menu (checkbox).
+
+## 0.8.0
+- Changed: playback field `offset` is renamed `delay`.
+- Fixed: the `group` (and `group_radius`) given when starting a recording is now in the copied playback command.
+- Fixed: the Survirec menu item is no longer recorded in the equipment.
+- Fixed: an entity that disappears (`loop:2`, kill, challenge replaced) no longer shows a death animation nor drops its equipment.
+- Changed: chat messages are grouped between separator lines; start message no longer shows the coordinates; copy buttons show the command block number only, with its type (impulse / chain) in color.
+- Changed: help pages: only the explained word is bold, `pos` can be relative, "Manage" page explains each command with a copy button. Lighter titles for the recordings and commands lists.
+
+## 0.7.1
+- Changed: default `group_radius` (and `group_restart` `radius`) is now 50 blocks.
+- Changed: the copied playback command includes `group_radius:50`, ready to edit.
+
+## 0.7.0
+- Changed: classic groups are local. An entity joins the nearest group of the same name within `group_radius` blocks (default 64), otherwise it starts a new group, so copies of a scene at different places no longer synchronize together.
+- Added: `group_radius` in `#survirec:v1/play` and `#survirec:v1/start`, `radius` in `#survirec:v1/group_restart` (`0` = every scene of that name).
+
+## 0.6.2
+- Fixed: non-operators could use the datapack through `/trigger` (menu buttons were enabled for every player, chat STOP buttons for recorders). The `survirec.menu` and `survirec.trg` triggers are removed: menu and chat buttons now run `/function`, which needs operator rights. Non-operators can only take part in challenges started by command blocks.
+- Added: `#survirec:v1/commands` (useful commands with copy buttons), used by the menu.
+
+## 0.6.1
+- Changed: the menu item is a camera head (minecraft-heads.com, Custom Head ID 120246).
+
+## 0.6.0
+- Added: Survirec menu (dialog), opened with the menu item (`#survirec:v1/menu_item`, right-click) or `#survirec:v1/menu`: new recording, challenge, stop, stop and walk back, cancel, my recordings, commands to copy, help, README.
+- Added: finished recordings are kept in the world (`survirec:lib`, `survirec:data seqs`). `#survirec:v1/records` lists them, `#survirec:v1/export` shows their copy buttons again, `#survirec:v1/forget` also deletes them.
+- Added: Smithed *Data Pack Menu Dialog* convention (`survirec:about` in `#smithed:data_packs`).
+
+## 0.5.1
+- Changed: load and tick go through StewBeet's versioned load (`user/link.py`) instead of `#minecraft:load` / `#minecraft:tick` tags; sources are declared with `data_pack.load` in `beet.yml`.
+- Removed: unused private function `v1/private/challenge` (old challenge without group); `v1/private/challenge_g` is renamed `v1/private/challenge`.
+
+## 0.5.0
+- Added: several players can record at the same time. The recording state is stored per player (scores `survirec.r*` and storage `survirec:rec p.p<pid>`), there is no global lock anymore.
+- Changed: `#survirec:v1/stop`, `stop_loop` and `abort` act on the player who runs them. Run from a command block or the console, they act on every recording.
+- Changed: a player who leaves during a recording has it cancelled when they come back (`on_record_stop` is sent then).
+- Changed: `#survirec:v1/start` and `#survirec:v1/challenge` must run as a player (`execute as @p run ...` from a command block).
+- Changed: `#survirec:v1/debug` lists every recording and armed player.
+- Fixed: the start marker of a recording is placed at the player, not at the command block that started it.
+
+## 0.4.2
+- Fixed: export no longer breaks on quotes. Names and lore of equipment are not recorded, and names are validated (letters, digits, `_`).
+- Fixed: a player who disconnected while recording no longer disturbs the next recording (stale tag and stop item are cleaned).
+- Fixed: the walk-back of a group no longer overflows for distances above about 500 blocks (it now lasts exactly 2 seconds, whatever the speed).
+- Fixed: entity registry is cleaned on every `kill`, `kill_name`, `kill_all` and challenge replacement.
+- Fixed: long exports are split so that equipment and arm swings cannot push a command over the command block limit.
+- Fixed: only the stop item stops a recording (any carrot on a stick used to).
+- Fixed: `survirec.gl` was declared twice (glide statistic and group loop); the group loop now has its own objective.
+- Fixed: `debug` answers the player who ran it.
+- Changed: `#survirec:v1/kill` without `tag` or `name` now returns an error; use `#survirec:v1/kill_all`.
+- Changed: `on_record_stop` is also sent when a recording is aborted (`abort`, `reset`, player leaving).
+
+## 0.4.1
+- Fixed: grouped playbacks now respect `loop` (`0` stays on the last position, `2` disappears). `1` still loops, as before.
+- Fixed: entities of a group created in the same tick now start together instead of waiting for the next cycle.
+- Added: `#survirec:v1/group_restart` to restart a classic group.
+
+## 0.4.0
+- Added: `group` playback field for classic sequences (`#survirec:v1/play`): global groups, synchronized cycles.
+- Added: `group` in `#survirec:v1/start`: the recording starts when the group starts a new cycle.
+
+## 0.3.0
+- Added: synchronized recording (`sync:1` in `#survirec:v1/challenge`): the recording starts when the doubles of the group start a new cycle.
+- Fixed: a refused challenge no longer overwrites the recording in progress.
+
+## 0.2.0
+- Added: `range` playback field, a pause distance per playback (`0` keeps the global range).
+
+## 0.1.0
+- Initial version: recording, playback, challenge mode, synchronized groups, `#survirec:v1` API and signals.

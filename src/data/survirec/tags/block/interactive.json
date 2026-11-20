@@ -1,0 +1,9 @@
+{
+  "values": [
+    "#minecraft:buttons",
+    "minecraft:lever",
+    "#survirec:doors_open",
+    "#survirec:trapdoors_open",
+    "#minecraft:fence_gates"
+  ]
+}

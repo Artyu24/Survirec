@@ -1,0 +1,13 @@
+$data modify storage survirec:tmp meta set from storage survirec:rec p.p$(pid).meta
+$data modify storage survirec:tmp d set from storage survirec:rec p.p$(pid).d
+$data modify storage survirec:tmp chunks set from storage survirec:rec p.p$(pid).chunks
+$data modify storage survirec:tmp e set from storage survirec:rec p.p$(pid).e
+$data modify storage survirec:tmp s set from storage survirec:rec p.p$(pid).s
+$data modify storage survirec:c id set from storage survirec:rec p.p$(pid).c.id
+$data modify storage survirec:c time set from storage survirec:rec p.p$(pid).c.time
+$data modify storage survirec:c group set from storage survirec:rec p.p$(pid).c.group
+$data modify storage survirec:c sync set from storage survirec:rec p.p$(pid).c.sync
+$data modify storage survirec:c tp_back set from storage survirec:rec p.p$(pid).c.tp_back
+$data modify storage survirec:c pid set from storage survirec:rec p.p$(pid).c.pid
+$data modify storage survirec:c gid set from storage survirec:rec p.p$(pid).c.gid
+$data modify storage survirec:tmp a set from storage survirec:rec p.p$(pid).a

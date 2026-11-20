@@ -1,0 +1,12 @@
+{
+  "values": [
+    {
+      "id": "minecraft:stone_pickaxe",
+      "required": false
+    },
+    {
+      "id": "minecraft:copper_pickaxe",
+      "required": false
+    }
+  ]
+}

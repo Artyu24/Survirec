@@ -1,7 +1,14 @@
+# Build output
 build/
+definitions_debug.json
+
+# Python
 __pycache__/
 *.pyc
+.venv/
+
+# OS / editors
 .DS_Store
 Thumbs.db
-.vscode/
 .idea/
+.vscode/
