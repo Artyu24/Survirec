@@ -1,9 +1,13 @@
 # Changelog
 
+## 1.2.0
+- Changed: the in-game help opens in dialogs instead of the chat: an index and one page per topic, with copy buttons and previous / next. The menu opens it directly.
+- Fixed: in the help, only the explained word is bold, not its whole description.
+
 ## 1.1.0
 - Fixed: several datapacks embedding different versions of Survirec no longer break each other. Every function and advancement now lives under `survirec:v<version>/` (it was a shared `survirec:v1/private/`, overwritten by whichever datapack loaded last), and each `#survirec:v1/...` tag entry checks that its version is the one LanternLoad elected. Only the newest version loads, ticks, answers calls and records actions.
 - Changed: blocks are read with [Bookshelf Block](https://docs.mcbookshelf.dev/en/latest/modules/block.html) (`bs.block`) instead of a built-in block list. Every block of the game can be placed back, with its whole state. Survirec now depends on Bookshelf Block: it is merged into `Survirec_datapack_with_libs.zip`, and a clickable message shows at load when it is missing.
-- Added: `#survirec:v1/help_page {with:{page:<1-5>}}`. The help pages link to it instead of internal functions, so chat links keep working after an update.
+- Added: `#survirec:v1/help_page {with:{page:<1-5>}}` opens one help page.
 - Fixed: a stop and walk back used the counter of the vault cubes as its step counter, so the next recordings could reuse the cube of a recording still running.
 - Changed: every internal name is readable (functions, objectives, entity tags, storages, fake players). The public API and the sequence format do not change; a world that ran 1.0.0 keeps the sequences of `survirec:data`, not the rest of its state.
 - Changed (performance): no entity scan in the tick while no playback entity exists, start markers only checked while someone records, sounds and particles only sent to nearby players.

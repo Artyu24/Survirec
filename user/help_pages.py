@@ -1,12 +1,13 @@
-""" In-game help: an index and one chat page per topic, linked together with the public #survirec:v1/help_page tag. """
+""" In-game help: a dialog index and one dialog per topic, opened by #survirec:v1/help and #survirec:v1/help_page. """
 # Imports
 from stewbeet import Mem, write_versioned_function
+from stouputils.typing import JsonDict
 
-from .common import copy, run, text
+from .dialogs import back, message, text, write
 
 # Constants
 PAGES: tuple[str, ...] = ("Enregistrer", "Lancer", "Champs", "Épreuve", "Gérer")
-""" Help pages, in order (help/p1 to help/p5). """
+""" Help pages, in order: dialogs <ns>:help/page_1 to <ns>:help/page_5. """
 
 PLAYBACK_HELP: tuple[tuple[str, str], ...] = (
 	("pos", "où ça apparaît, relatif possible (~ ~ ~ = centre du bloc)"),
@@ -55,24 +56,40 @@ MANAGE_HELP: tuple[tuple[str, str, str], ...] = (
 """ Page 5: management entry points, with the command copied by their button (format with api). """
 
 
-def field(name: str, description: str, *after: str) -> str:
+
+
+def field(name: str, description: str) -> JsonDict:
 	""" Help line: the explained word in bold, then its description. """
-	return f"tellraw @s [{','.join((text(f'   {name}', 'gold', 'bold:true'), text(f'  {description}', 'gray'), *after))}]"
+	return line((name, "gold", True), (f"  {description}", "gray", False))
 
 
-def line(*components: str) -> str:
-	""" Indented help line. """
-	return f"tellraw @s [{','.join((text('   '), *components))}]"
+def line(*parts: tuple[str, str] | tuple[str, str, bool]) -> JsonDict:
+	""" Help line from (text, color) or (text, color, is_bold) parts.
+	The empty root keeps the parts apart: in a list, every part inherits the style of the first one.
+	"""
+	contents: list[str | JsonDict] = [""]
+	for part in parts:
+		component: JsonDict = {"text": part[0], "color": part[1]}
+		if len(part) == 3 and part[2]:
+			component["bold"] = True
+		contents.append(component)
+	return {"type": "minecraft:plain_message", "width": 300, "contents": contents}
 
 
-def buttons(*components: str) -> str:
-	""" Indented line of buttons, two spaces apart. """
-	parts: list[str] = []
-	for button in components:
-		if parts:
-			parts.append(text("  "))
-		parts.append(button)
-	return line(*parts)
+def copy_button(label: str, command: str, width: int = 150) -> JsonDict:
+	return {"label": text(label, "yellow"), "width": width, "tooltip": text(command), "action": {"type": "minecraft:copy_to_clipboard", "value": command}}
+
+
+def copy_line(label: str, command: str) -> JsonDict:
+	""" Body line copying a command when clicked: a button on its own row, above the action buttons. """
+	return {"type": "minecraft:plain_message", "width": 300, "contents": {
+		"text": label, "color": "yellow",
+		"click_event": {"action": "copy_to_clipboard", "value": command}, "hover_event": {"action": "show_text", "value": command},
+	}}
+
+
+def page_button(ns: str, label: str, page: int) -> JsonDict:
+	return {"label": text(label, "green"), "width": 150, "action": {"type": "minecraft:show_dialog", "dialog": f"{ns}:help/page_{page}"}}
 
 
 def main() -> None:
@@ -83,61 +100,68 @@ def main() -> None:
 	start_example: str = f'/function #{api}/start {{with:{{name:"walk",every:4}}}}'
 	challenge_example: str = f'execute as @p run function #{api}/challenge {{with:{{id:"epreuve1",time:30,group:"salle1"}}}}'
 
-	def page_button(label: str, page: int, color: str) -> str:
-		return run(label, f"/function #{api}/help_page {{with:{{page:{page}}}}}", color, "Ouvrir")
-
-	playback_fields: str = ""
-	for name, description in PLAYBACK_HELP:
-		playback_fields += field(name, description) + "\n"
-	challenge_fields: str = ""
-	for name, description in CHALLENGE_HELP:
-		challenge_fields += field(name, description) + "\n"
-	manage_fields: str = ""
-	for name, description, command in MANAGE_HELP:
-		manage_fields += field(name, f"{description}  ", copy("[Copier]", command.format(api=api))) + "\n"
-
-	bodies: tuple[str, ...] = (
-		f"""{line(text(start_example[1:], "aqua"))}
-{line(copy("[Copier l'exemple]", start_example))}
-{field("name", "nom de la séquence (lettres, chiffres, _)")}
-{field("every", "4 = fluide, 2 = précis")}
-{field("group", "démarre au prochain cycle du groupe")}
-tellraw @s [{text('   Enregistré aussi : ', 'gray')},{text('coups, boutons, leviers, portes, blocs posés et cassés', 'aqua')}]
-tellraw @s [{text('   Arrêt : ', 'gray')},{text('clic droit avec la barrière', 'red')}]
-""",
-		f"""tellraw @s [{text('   1. Clique sur ', 'gray')},{text('[Copier 1]', 'yellow')},{text(" à la fin de l'enregistrement", 'gray')}]
-tellraw @s [{text('   2. Colle-la dans un command block ', 'gray')},{text('impulsion', 'gold')}]
-tellraw @s [{text('   3. Active le bloc', 'gray')}]
-tellraw @s [{text('   Les champs à modifier sont ', 'gray')},{text('au début', 'gold')},{text(' de la commande', 'gray')}]
-""",
-		playback_fields,
-		f"""{line(text(f"execute as @p run function #{api}/challenge", "aqua"))}
-{line(text('{with:{id:"epreuve1",time:30,group:"salle1"}}', "aqua"))}
-{line(copy("[Copier l'exemple]", challenge_example))}
-{challenge_fields}tellraw @s [{text('   À mettre dans un command block, derrière un bouton ou une plaque.', 'gray')}]
-""",
-		manage_fields,
+	pages: tuple[tuple[list[JsonDict], list[JsonDict]], ...] = (
+		([
+			message(start_example[1:], "aqua"),
+			field("name", "nom de la séquence (lettres, chiffres, _)"),
+			field("every", "4 = fluide, 2 = précis"),
+			field("group", "démarre au prochain cycle du groupe"),
+			line(("Enregistré aussi : ", "gray"), ("coups, boutons, leviers, portes, blocs posés et cassés", "aqua")),
+			line(("Arrêt : ", "gray"), ("clic droit avec la barrière", "red")),
+		], [copy_button("Copier l'exemple", start_example)]),
+		([
+			line(("1. Clique sur ", "gray"), ("[Copier 1]", "yellow"), (" à la fin de l'enregistrement", "gray")),
+			line(("2. Colle-la dans un command block ", "gray"), ("impulsion", "gold")),
+			line(("3. Active le bloc", "gray")),
+			line(("Les champs à modifier sont ", "gray"), ("au début", "gold"), (" de la commande", "gray")),
+		], []),
+		([field(name, description) for name, description in PLAYBACK_HELP], []),
+		([
+			message(challenge_example, "aqua"),
+			*(field(name, description) for name, description in CHALLENGE_HELP),
+			message("À mettre dans un command block, derrière un bouton ou une plaque."),
+			copy_line("[Copier l'exemple]", challenge_example),
+		], []),
+		(
+			[field(name, description) for name, description, _ in MANAGE_HELP],
+			[copy_button(name, command.format(api=api)) for name, _, command in MANAGE_HELP],
+		),
 	)
 
-	for page, (title, body) in enumerate(zip(PAGES, bodies, strict=True), start=1):
-		navigation: list[str] = []
+	for page, (title, (body, actions)) in enumerate(zip(PAGES, pages, strict=True), start=1):
+		navigation: list[JsonDict] = []
 		if page > 1:
-			navigation.append(page_button("[< Précédent]", page - 1, "green"))
-		navigation.append(run("[Menu]", f"/function #{api}/help", "gold", "Ouvrir"))
+			navigation.append(page_button(ns, "< Précédent", page - 1))
 		if page < len(PAGES):
-			navigation.append(page_button("[Suivant >]", page + 1, "green"))
-		write_versioned_function(f"help/page_{page}", f"""
-tellraw @s {text(f"══ SURVIREC · {page}/{len(PAGES)} · {title.upper()} ══", "gold")}
-{body}{buttons(*navigation)}
-""")
+			navigation.append(page_button(ns, "Suivant >", page + 1))
+		write(f"{ns}:help/page_{page}", {
+			"type": "minecraft:multi_action",
+			"title": {"text": f"Aide {page}/{len(PAGES)} · {title}", "color": "gold"},
+			"body": body,
+			"columns": 2,
+			"actions": [*actions, *navigation],
+			"exit_action": back(f"{ns}:help"),
+		})
 
-	pages: str = ""
-	for page, title in enumerate(PAGES, start=1):
-		pages += line(page_button(f"[{page}] {title}", page, "aqua")) + "\n"
-	write_versioned_function("help/index", f"""
-tellraw @s {text("══ SURVIREC · AIDE ══", "gold")}
-{buttons(run("[🎬 Ouvrir le menu]", f"/function #{api}/menu", "gold", "Interface Survirec"),
-	run("[Recevoir l'objet]", f"/function #{api}/menu_item", "yellow", "Objet qui ouvre le menu d'un clic droit"))}
-{pages}""")
-	# called by the public help_page entry point, which checks the page number
-	write_versioned_function("help/open_page", f"$function {functions}/help/page_$(page)")
+	write(f"{ns}:help", {
+		"type": "minecraft:multi_action",
+		"title": {"text": "Aide Survirec", "color": "gold"},
+		"body": [message("Choisis une page.")],
+		"columns": 2,
+		"actions": [
+			*(page_button(ns, f"{page}. {title}", page) for page, title in enumerate(PAGES, start=1)),
+			{"label": text("Recevoir l'objet", "yellow"), "width": 150, "tooltip": text("Objet qui ouvre le menu d'un clic droit"),
+				"action": {"type": "minecraft:run_command", "command": f"function #{api}/menu_item"}},
+		],
+		"exit_action": back(f"{ns}:menu", "Menu"),
+	})
+
+	# Entry points of #survirec:v1/help and #survirec:v1/help_page (which checks the page number)
+	write_versioned_function("help/open_index", f"""
+execute unless entity @s[type=minecraft:player] run return fail
+dialog show @s {ns}:help
+""")
+	write_versioned_function("help/open_page", f"""
+execute unless entity @s[type=minecraft:player] run return fail
+$dialog show @s {ns}:help/page_$(page)
+""")

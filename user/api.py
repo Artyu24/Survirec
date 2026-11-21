@@ -130,11 +130,11 @@ dialog show @s {ns}:menu
 """,
 		"menu_item":		EntryPoint("menu/give_item"),
 		"commands":			EntryPoint("menu/show_commands"),
-		"help":				EntryPoint("help/index"),
+		"help":				EntryPoint("help/open_index"),
 		"help_page": f"""
 {merge(ns, "{page:1}")}
 execute store result score #page {ns}.data run data get storage {call} options.page
-execute unless score #page {ns}.data matches 1..{len(PAGES)} run return run function {functions}/help/index
+execute unless score #page {ns}.data matches 1..{len(PAGES)} run return run function {functions}/help/open_index
 execute store result storage {call} options.page int 1 run scoreboard players get #page {ns}.data
 function {functions}/help/open_page with storage {call} options
 """,

@@ -18,7 +18,6 @@ MENU_COMMANDS: tuple[tuple[str, str, str, str], ...] = (
 	("✖ Annuler", "red", "abort", "Annule ton enregistrement en cours"),
 	("📂 Mes enregistrements", "", "records", "Rejouer, recopier ou supprimer tes séquences"),
 	("📋 Commandes à copier", "", "commands", "Les commandes utiles, prêtes à coller"),
-	("❓ Aide", "", "help", "Aide détaillée dans le chat"),
 )
 """ Menu buttons running an entry point: (label, color, entry point, tooltip). """
 
@@ -64,6 +63,8 @@ def main() -> None:
 				"action": {"type": "minecraft:show_dialog", "dialog": f"{ns}:challenge"}},
 			*({"label": text(label, color), "width": 150, "tooltip": text(tooltip),
 				"action": {"type": "minecraft:run_command", "command": f"function {api}/{entry}"}} for label, color, entry, tooltip in MENU_COMMANDS),
+			{"label": text("❓ Aide"), "width": 150, "tooltip": text("Aide détaillée, page par page"),
+				"action": {"type": "minecraft:show_dialog", "dialog": f"{ns}:help"}},
 			{"label": text("📖 README (GitHub)", "aqua"), "width": 304, "tooltip": text("Documentation complète"),
 				"action": {"type": "minecraft:open_url", "url": f"{REPOSITORY}#readme"}},
 		],
