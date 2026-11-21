@@ -1,206 +1,194 @@
-""" Spawning a playback entity from the merged playback fields. """
+""" Spawning a playback entity from its settings, <ns>:call spawn (the playback options, or the double of a challenge). """
 # Imports
+from dataclasses import dataclass
+
 from stewbeet import Mem, write_versioned_function
+
+from .common import AXES, DIMENSIONS, EQUIPMENT_FIELDS, Storages, store_position
+
+# Constants
+MANNEQUIN_IDS: tuple[str, ...] = ("", "minecraft:mannequin", "mannequin")
+""" Values of the entity setting spawning a mannequin (any other value is summoned as it is). """
+
+SEQUENCE_SCORES: tuple[tuple[str, str], ...] = (
+	("keyframe_ticks", "n 100"), ("start_yaw", "y"), ("start_pitch", "p"), ("keyframe_count", "d"), ("has_swings", "s"), ("has_actions", "a"),
+)
+""" Objective of the entity -> key of its sequence (and scale): keyframe step, start rotation, lengths of the lists. """
+
+
+@dataclass(frozen=True, slots=True)
+class TimedList:
+	""" A timed list of the sequence, played by an event reader of playback.py. """
+
+	has_entries: str
+	""" Objective: 1 when the sequence has some. """
+
+	index: str
+	""" Objective: index of the next entry. """
+
+	folder: str
+	""" Folder of the reader functions (load_next, skip_past). """
+
+
+TIMED_LISTS: tuple[TimedList, ...] = (TimedList("has_swings", "swing_index", "swing"), TimedList("has_actions", "action_index", "action"))
 
 
 def main() -> None:
 	ns: str = Mem.ctx.project_id
 	version: str = Mem.ctx.project_version
-	major: str = version.split(".")[0]
+	functions: str = f"{ns}:v{version}"
+	call: str = Storages(ns).call
+	tags: str = f'Tags:["{ns}.instance","{ns}.entity","{ns}.new","smithed.entity","smithed.strict"]'
 
-	write_versioned_function("spawn/cbpos", f"""
-execute store result storage {ns}:in cfg.cbx int 1 run data get entity @s Pos[0]
-execute store result storage {ns}:in cfg.cby int 1 run data get entity @s Pos[1]
-execute store result storage {ns}:in cfg.cbz int 1 run data get entity @s Pos[2]
+	def setting(objective: str, key: str, default: int) -> str:
+		""" Objective from the setting <key>, `default` when it is missing. """
+		return f"""scoreboard players set @s {ns}.{objective} {default}
+execute if data storage {call} spawn.{key} store result score @s {ns}.{objective} run data get storage {call} spawn.{key}
+"""
+
+	write_versioned_function("spawn/store_command_block_position", f"""
+{store_position(f"{call} options.command_block_")}
 kill @s
 """)
 
-	write_versioned_function("spawn/cfg", f"""
-$execute store result score @s {ns}.n100 run data get storage {ns}:data seqs.$(name).n 100
-$execute store result score @s {ns}.yw0 run data get storage {ns}:data seqs.$(name).y
-$execute store result score @s {ns}.pt0 run data get storage {ns}:data seqs.$(name).p
-$execute store result score @s {ns}.len run data get storage {ns}:data seqs.$(name).d
-$execute store result score @s {ns}.hs run data get storage {ns}:data seqs.$(name).s
-$execute store result score @s {ns}.ha run data get storage {ns}:data seqs.$(name).a
+	sequence_scores: str = ""
+	for objective, key in SEQUENCE_SCORES:
+		sequence_scores += f"$execute store result score @s {ns}.{objective} run data get storage {ns}:data seqs.$(name).{key}\n"
+	write_versioned_function("spawn/read_sequence", sequence_scores)
+
+	write_versioned_function("spawn/join_local_group", f"""
+# joins the nearest group of the same name within group_radius blocks, else starts a new one
+scoreboard players set #found_group {ns}.data 0
+$execute as @e[tag={ns}.instance,tag={ns}.group.$(group),distance=..$(group_radius),sort=nearest,limit=1] run scoreboard players operation #found_group {ns}.data = @s {ns}.group_id
+execute if score #found_group {ns}.data matches ..0 run scoreboard players add #next_group_id {ns}.data 1
+execute if score #found_group {ns}.data matches ..0 run scoreboard players operation #found_group {ns}.data = #next_group_id {ns}.data
+scoreboard players operation @s {ns}.group_id = #found_group {ns}.data
+$tag @s add {ns}.group.$(group)
 """)
 
-	write_versioned_function("spawn/gjoin", f"""
-# rejoint le groupe du même nom le plus proche (à moins de gr blocs), sinon en crée un nouveau
-scoreboard players set #found {ns}.data 0
-$execute as @e[tag={ns}.m,tag={ns}.g.$(group),distance=..$(gr),sort=nearest,limit=1] run scoreboard players operation #found {ns}.data = @s {ns}.grp
-execute if score #found {ns}.data matches ..0 run scoreboard players add #gid {ns}.data 1
-execute if score #found {ns}.data matches ..0 run scoreboard players operation #found {ns}.data = #gid {ns}.data
-scoreboard players operation @s {ns}.grp = #found {ns}.data
-$tag @s add {ns}.g.$(group)
-""")
-
+	start_point: str = ""
+	for index, axis in enumerate(AXES):
+		start_point += f"execute store result score @s {ns}.start_{axis} run data get entity @s Pos[{index}] 1000\n"
 	write_versioned_function("spawn/init", f"""
 tag @s remove {ns}.new
-scoreboard players operation @s {ns}.id = #id {ns}.data
-execute store result score @s {ns}.ax run data get entity @s Pos[0] 1000
-execute store result score @s {ns}.ay run data get entity @s Pos[1] 1000
-execute store result score @s {ns}.az run data get entity @s Pos[2] 1000
-execute store result storage {ns}:in a.id int 1 run scoreboard players get @s {ns}.id
-function {ns}:v{version}/spawn/reg with storage {ns}:in a
-function {ns}:v{version}/spawn/ntag with storage {ns}:in a
-execute unless data storage {ns}:in a{{tag:""}} run function {ns}:v{version}/spawn/utag with storage {ns}:in a
-scoreboard players set @s {ns}.grp 0
-execute if data storage {ns}:in a.grp store result score @s {ns}.grp run data get storage {ns}:in a.grp
-execute if score @s {ns}.grp matches -1 run function {ns}:v{version}/spawn/gjoin with storage {ns}:in a
-scoreboard players set @s {ns}.gloop 1
-scoreboard players set @s {ns}.gs -1
-execute if data storage {ns}:in a.gl store result score @s {ns}.gloop run data get storage {ns}:in a.gl
-scoreboard players set @s {ns}.rs 0
-scoreboard players set @s {ns}.hs 0
-scoreboard players set @s {ns}.ha 0
-function {ns}:v{version}/spawn/cfg with storage {ns}:in a
-execute if score @s {ns}.hs matches 1.. run scoreboard players set @s {ns}.hs 1
-execute if score @s {ns}.ha matches 1.. run scoreboard players set @s {ns}.ha 1
-scoreboard players set @s {ns}.rst 1
-execute if data storage {ns}:in a.restore store result score @s {ns}.rst run data get storage {ns}:in a.restore
-scoreboard players set @s {ns}.hitp 0
-execute if data storage {ns}:in a.hitp store result score @s {ns}.hitp run data get storage {ns}:in a.hitp
-scoreboard players set @s {ns}.rlt -1
-scoreboard players set @s {ns}.rsb 0
-execute if data storage {ns}:in a.rsb store result score @s {ns}.rsb run data get storage {ns}:in a.rsb
-execute if score @s {ns}.rsb matches 1 store result score @s {ns}.cbx run data get storage {ns}:in a.cbx
-execute if score @s {ns}.rsb matches 1 store result score @s {ns}.cby run data get storage {ns}:in a.cby
-execute if score @s {ns}.rsb matches 1 store result score @s {ns}.cbz run data get storage {ns}:in a.cbz
-execute store result score @s {ns}.bbx run data get entity @s Pos[0]
-execute store result score @s {ns}.bby run data get entity @s Pos[1]
-execute store result score @s {ns}.bbz run data get entity @s Pos[2]
-function {ns}:v{version}/spawn/size with storage {ns}:in a
-execute unless score @s {ns}.n100 matches 1.. run scoreboard players set @s {ns}.len 0
-scoreboard players operation @s {ns}.dv = @s {ns}.n100
-execute store result score @s {ns}.lp run data get storage {ns}:in a.loop
-execute store result score @s {ns}.spd run data get storage {ns}:in a.speed
-scoreboard players operation @s {ns}.bx = @s {ns}.ax
-scoreboard players operation @s {ns}.by = @s {ns}.ay
-scoreboard players operation @s {ns}.bz = @s {ns}.az
-scoreboard players operation @s {ns}.byw = @s {ns}.yw0
-scoreboard players operation @s {ns}.bpt = @s {ns}.pt0
-scoreboard players set @s {ns}.st 0
-scoreboard players set @s {ns}.pl 0
-scoreboard players set @s {ns}.near 1
-scoreboard players set @s {ns}.rng 0
-execute store result score @s {ns}.rng run data get storage {ns}:in a.range
-execute if score @s {ns}.rng matches 1.. run tag @s add {ns}.rg
-scoreboard players set @s {ns}.seg 0
-scoreboard players set @s {ns}.ei 0
-scoreboard players set @s {ns}.ek 0
-scoreboard players set @s {ns}.ov 0
-scoreboard players set @s {ns}.fl -1
-scoreboard players set @s {ns}.fx 0
-execute unless entity @s[type=minecraft:mannequin] run scoreboard players set @s {ns}.fx 1
-scoreboard players set @s {ns}.rb 0
-scoreboard players set @s {ns}.run 0
-execute if score @s {ns}.len matches 1.. run scoreboard players set @s {ns}.run 1
-execute if score @s {ns}.run matches 1 run function {ns}:v{version}/playback/load
-execute if score @s {ns}.grp matches 1.. run function {ns}:v{version}/playback/grpinit
-function {ns}:v{version}/spawn/ovr
-execute if entity @s[type=minecraft:mannequin] if data storage {ns}:in prof run data modify entity @s profile set from storage {ns}:in prof
-data remove storage {ns}:in prof
-execute if entity @s[type=minecraft:mannequin] unless data storage {ns}:in a{{skin:""}} run function {ns}:v{version}/spawn/skin with storage {ns}:in a
-execute if entity @s[type=minecraft:mannequin] if data storage {ns}:in a{{skin:""}} unless data storage {ns}:in a{{texture:""}} run function {ns}:v{version}/spawn/tex with storage {ns}:in a
-execute unless data storage {ns}:in a{{pose:""}} run function {ns}:v{version}/spawn/pose_fix with storage {ns}:in a
-execute store result score @s {ns}.pr run data get storage {ns}:in a.offset 100
-scoreboard players operation #t {ns}.data = @s {ns}.len
-scoreboard players operation #t {ns}.data *= @s {ns}.n100
-execute if score #t {ns}.data matches 1.. run scoreboard players operation @s {ns}.pr %= #t {ns}.data
-execute if score @s {ns}.run matches 1 if score @s {ns}.pr >= @s {ns}.n100 run function {ns}:v{version}/playback/adv
-execute if score @s {ns}.hs matches 1 run scoreboard players set @s {ns}.si 0
-execute if score @s {ns}.hs matches 1 run function {ns}:v{version}/playback/swload
-execute if score @s {ns}.hs matches 1 run function {ns}:v{version}/playback/swskip
-execute if score @s {ns}.ha matches 1 run scoreboard players set @s {ns}.ai 0
-execute if score @s {ns}.ha matches 1 run function {ns}:v{version}/playback/acload
-execute if score @s {ns}.ha matches 1 run function {ns}:v{version}/playback/acskip
-function {ns}:v{version}/playback/move
-function #{ns}:v{major}/signals/on_spawn
+scoreboard players operation @s {ns}.instance_id = #next_instance_id {ns}.data
+scoreboard players add #instance_count {ns}.data 1
+{start_point}execute store result storage {call} spawn.instance_id int 1 run scoreboard players get @s {ns}.instance_id
+function {functions}/spawn/register with storage {call} spawn
+function {functions}/spawn/tag_name with storage {call} spawn
+execute unless data storage {call} spawn{{tag:""}} run function {functions}/spawn/tag_user with storage {call} spawn
+{setting("group_id", "group_id", 0)}execute if score @s {ns}.group_id matches -1 run function {functions}/spawn/join_local_group with storage {call} spawn
+{setting("group_loop", "group_loop", 1)}scoreboard players set @s {ns}.group_start_tick -1
+function {functions}/spawn/init_sequence
+function {functions}/spawn/init_appearance
+function {functions}/spawn/init_start
 """)
 
-	write_versioned_function("spawn/killtag", f"""
-scoreboard players set #kres {ns}.data 1
-$execute as @e[tag={ns}.t.$(tag)] run function {ns}:v{version}/playback/delete
-scoreboard players set #kres {ns}.data 0
+	has_lists: str = ""
+	for timed_list in TIMED_LISTS:
+		has_lists += f"scoreboard players set @s {ns}.{timed_list.has_entries} 0\n"
+	clamp_lists: str = ""
+	for timed_list in TIMED_LISTS:
+		clamp_lists += f"execute if score @s {ns}.{timed_list.has_entries} matches 1.. run scoreboard players set @s {ns}.{timed_list.has_entries} 1\n"
+	command_block: str = ""
+	for axis in AXES:
+		command_block += f"execute if score @s {ns}.redstone matches 1 store result score @s {ns}.command_block_{axis} run data get storage {call} spawn.command_block_{axis}\n"
+	start_block: str = ""
+	for index, axis in enumerate(AXES):
+		start_block += f"execute store result score @s {ns}.start_block_{axis} run data get entity @s Pos[{index}]\n"
+	keyframe_start: str = ""
+	for name in DIMENSIONS:
+		keyframe_start += f"scoreboard players operation @s {ns}.keyframe_{name} = @s {ns}.start_{name}\n"
+	write_versioned_function("spawn/init_sequence", f"""
+scoreboard players set @s {ns}.restart_pending 0
+{has_lists}function {functions}/spawn/read_sequence with storage {call} spawn
+{clamp_lists}{setting("restore_mode", "restore", 1)}{setting("hit_players", "hit_players", 0)}scoreboard players set @s {ns}.next_release_tick -1
+{setting("redstone", "redstone", 0)}{command_block}{start_block}function {functions}/spawn/set_size with storage {call} spawn
+execute unless score @s {ns}.keyframe_ticks matches 1.. run scoreboard players set @s {ns}.keyframe_count 0
+scoreboard players operation @s {ns}.keyframe_divisor = @s {ns}.keyframe_ticks
+execute store result score @s {ns}.loop_mode run data get storage {call} spawn.loop
+execute store result score @s {ns}.speed run data get storage {call} spawn.speed
+{keyframe_start}scoreboard players set @s {ns}.is_still 0
+scoreboard players set @s {ns}.is_still_placed 0
+scoreboard players set @s {ns}.is_near 1
+{setting("own_range", "range", 0)}execute if score @s {ns}.own_range matches 1.. run tag @s add {ns}.has_own_range
+scoreboard players set @s {ns}.keyframe_index 0
+scoreboard players set @s {ns}.equipment_index 0
+scoreboard players set @s {ns}.next_equipment_keyframe 0
+scoreboard players set @s {ns}.is_equipment_forced 0
+scoreboard players set @s {ns}.pose_flags -1
+scoreboard players set @s {ns}.is_pose_fixed 0
+execute unless entity @s[type=minecraft:mannequin] run scoreboard players set @s {ns}.is_pose_fixed 1
+scoreboard players set @s {ns}.turns_body 0
+scoreboard players set @s {ns}.play_state 0
+execute if score @s {ns}.keyframe_count matches 1.. run scoreboard players set @s {ns}.play_state 1
+execute if score @s {ns}.play_state matches 1 run function {functions}/playback/load_keyframe
+execute if score @s {ns}.group_id matches 1.. run function {functions}/group/join
 """)
 
-	write_versioned_function("spawn/ntag", f"""
-$tag @s add {ns}.n.$(name)
+	write_versioned_function("spawn/init_appearance", f"""
+function {functions}/spawn/override_equipment
+execute if entity @s[type=minecraft:mannequin] if data storage {call} profile run data modify entity @s profile set from storage {call} profile
+data remove storage {call} profile
+execute if entity @s[type=minecraft:mannequin] unless data storage {call} spawn{{skin:""}} run function {functions}/spawn/set_skin with storage {call} spawn
+execute if entity @s[type=minecraft:mannequin] if data storage {call} spawn{{skin:""}} unless data storage {call} spawn{{texture:""}} run function {functions}/spawn/set_texture with storage {call} spawn
+execute unless data storage {call} spawn{{pose:""}} run function {functions}/spawn/force_pose with storage {call} spawn
 """)
 
-	write_versioned_function("spawn/ovr", f"""
-# Équipement imposé depuis le command block : si un champ est rempli, l'équipement enregistré ne change plus après le départ
-execute unless data storage {ns}:in a{{head:""}} run data modify storage {ns}:in s set value {{slot:"armor.head"}}
-execute unless data storage {ns}:in a{{head:""}} run data modify storage {ns}:in s.item set from storage {ns}:in a.head
-execute unless data storage {ns}:in a{{head:""}} run function {ns}:v{version}/spawn/slot with storage {ns}:in s
-execute unless data storage {ns}:in a{{head:""}} run scoreboard players set @s {ns}.ov 1
-execute unless data storage {ns}:in a{{chest:""}} run data modify storage {ns}:in s set value {{slot:"armor.chest"}}
-execute unless data storage {ns}:in a{{chest:""}} run data modify storage {ns}:in s.item set from storage {ns}:in a.chest
-execute unless data storage {ns}:in a{{chest:""}} run function {ns}:v{version}/spawn/slot with storage {ns}:in s
-execute unless data storage {ns}:in a{{chest:""}} run scoreboard players set @s {ns}.ov 1
-execute unless data storage {ns}:in a{{legs:""}} run data modify storage {ns}:in s set value {{slot:"armor.legs"}}
-execute unless data storage {ns}:in a{{legs:""}} run data modify storage {ns}:in s.item set from storage {ns}:in a.legs
-execute unless data storage {ns}:in a{{legs:""}} run function {ns}:v{version}/spawn/slot with storage {ns}:in s
-execute unless data storage {ns}:in a{{legs:""}} run scoreboard players set @s {ns}.ov 1
-execute unless data storage {ns}:in a{{feet:""}} run data modify storage {ns}:in s set value {{slot:"armor.feet"}}
-execute unless data storage {ns}:in a{{feet:""}} run data modify storage {ns}:in s.item set from storage {ns}:in a.feet
-execute unless data storage {ns}:in a{{feet:""}} run function {ns}:v{version}/spawn/slot with storage {ns}:in s
-execute unless data storage {ns}:in a{{feet:""}} run scoreboard players set @s {ns}.ov 1
-execute unless data storage {ns}:in a{{mainhand:""}} run data modify storage {ns}:in s set value {{slot:"weapon.mainhand"}}
-execute unless data storage {ns}:in a{{mainhand:""}} run data modify storage {ns}:in s.item set from storage {ns}:in a.mainhand
-execute unless data storage {ns}:in a{{mainhand:""}} run function {ns}:v{version}/spawn/slot with storage {ns}:in s
-execute unless data storage {ns}:in a{{mainhand:""}} run scoreboard players set @s {ns}.ov 1
-execute unless data storage {ns}:in a{{offhand:""}} run data modify storage {ns}:in s set value {{slot:"weapon.offhand"}}
-execute unless data storage {ns}:in a{{offhand:""}} run data modify storage {ns}:in s.item set from storage {ns}:in a.offhand
-execute unless data storage {ns}:in a{{offhand:""}} run function {ns}:v{version}/spawn/slot with storage {ns}:in s
-execute unless data storage {ns}:in a{{offhand:""}} run scoreboard players set @s {ns}.ov 1
+	timed_lists: str = ""
+	for timed_list in TIMED_LISTS:
+		timed_lists += f"""execute if score @s {ns}.{timed_list.has_entries} matches 1 run scoreboard players set @s {ns}.{timed_list.index} 0
+execute if score @s {ns}.{timed_list.has_entries} matches 1 run function {functions}/{timed_list.folder}/load_next
+execute if score @s {ns}.{timed_list.has_entries} matches 1 run function {functions}/{timed_list.folder}/skip_past
+"""
+	write_versioned_function("spawn/init_start", f"""
+# a delayed start moves into the sequence, past swings and actions included
+execute store result score @s {ns}.keyframe_progress run data get storage {call} spawn.delay 100
+scoreboard players operation #sequence_length {ns}.data = @s {ns}.keyframe_count
+scoreboard players operation #sequence_length {ns}.data *= @s {ns}.keyframe_ticks
+execute if score #sequence_length {ns}.data matches 1.. run scoreboard players operation @s {ns}.keyframe_progress %= #sequence_length {ns}.data
+execute if score @s {ns}.play_state matches 1 if score @s {ns}.keyframe_progress >= @s {ns}.keyframe_ticks run function {functions}/playback/advance_keyframe
+{timed_lists}function {functions}/playback/move
+function #{ns}:v{version.split(".")[0]}/signals/on_spawn
 """)
 
-	write_versioned_function("spawn/pose_fix", f"""
+	write_versioned_function("spawn/tag_name", f"$tag @s add {ns}.sequence.$(name)")
+	write_versioned_function("spawn/tag_user", f"$tag @s add {ns}.tag.$(tag)")
+	write_versioned_function("spawn/register", f'$data modify storage {ns}:instances i$(instance_id) set value {{name:"$(name)"}}')
+
+	overrides: str = ""
+	for field, slot in EQUIPMENT_FIELDS.items():
+		overrides += f"""execute unless data storage {call} spawn{{{field}:""}} run data modify storage {call} slot_override set value {{slot:"{slot}"}}
+execute unless data storage {call} spawn{{{field}:""}} run data modify storage {call} slot_override.item set from storage {call} spawn.{field}
+execute unless data storage {call} spawn{{{field}:""}} run function {functions}/spawn/set_slot with storage {call} slot_override
+execute unless data storage {call} spawn{{{field}:""}} run scoreboard players set @s {ns}.is_equipment_forced 1
+"""
+	write_versioned_function("spawn/override_equipment", f"""
+# a filled equipment field also stops the recorded equipment changes
+{overrides}""")
+
+	write_versioned_function("spawn/force_pose", f"""
 $data modify entity @s pose set value "$(pose)"
-execute if data storage {ns}:in a{{pose:"fall_flying"}} run data modify entity @s OnGround set value 0b
-execute if data storage {ns}:in a{{pose:"fall_flying"}} run data modify entity @s FallFlying set value 1b
-scoreboard players set @s {ns}.fx 1
+execute if data storage {call} spawn{{pose:"fall_flying"}} run data modify entity @s OnGround set value 0b
+execute if data storage {call} spawn{{pose:"fall_flying"}} run data modify entity @s FallFlying set value 1b
+scoreboard players set @s {ns}.is_pose_fixed 1
 """)
 
-	write_versioned_function("spawn/reg", f"""
-$data modify storage {ns}:inst i$(id) set value {{name:"$(name)"}}
+	write_versioned_function("spawn/set_size", "$attribute @s minecraft:scale base set $(size)")
+	write_versioned_function("spawn/set_skin", '$data modify entity @s profile set value "$(skin)"')
+	write_versioned_function("spawn/set_texture", '$data modify entity @s profile set value {properties:[{name:"textures",value:"$(texture)"}]}')
+	write_versioned_function("spawn/set_slot", "$item replace entity @s $(slot) with $(item)")
+
+	mannequins: str = ""
+	for entity in MANNEQUIN_IDS:
+		mannequins += f'execute if data storage {call} spawn{{entity:"{entity}"}} run function {functions}/spawn/summon_mannequin\n'
+	not_mannequin: str = " ".join(f'unless data storage {call} spawn{{entity:"{entity}"}}' for entity in MANNEQUIN_IDS)
+	write_versioned_function("spawn/summon", f"""
+execute unless data storage {call} spawn{{tag:""}} run function {functions}/kill/by_tag with storage {call} spawn
+{mannequins}execute {not_mannequin} run function {functions}/spawn/summon_other with storage {call} spawn
+scoreboard players add #next_instance_id {ns}.data 1
+execute as @e[tag={ns}.new,sort=nearest,limit=1] run function {functions}/spawn/init
 """)
 
-	write_versioned_function("spawn/size", f"""
-$attribute @s minecraft:scale base set $(size)
-""")
-
-	write_versioned_function("spawn/skin", f"""
-$data modify entity @s profile set value "$(skin)"
-""")
-
-	write_versioned_function("spawn/slot", f"""
-$item replace entity @s $(slot) with $(item)
-""")
-
-	write_versioned_function("spawn/spawn", f"""
-execute unless data storage {ns}:in a{{tag:""}} run function {ns}:v{version}/spawn/killtag with storage {ns}:in a
-execute if data storage {ns}:in a{{entity:""}} run function {ns}:v{version}/spawn/sum_m
-execute if data storage {ns}:in a{{entity:"minecraft:mannequin"}} run function {ns}:v{version}/spawn/sum_m
-execute if data storage {ns}:in a{{entity:"mannequin"}} run function {ns}:v{version}/spawn/sum_m
-execute unless data storage {ns}:in a{{entity:""}} unless data storage {ns}:in a{{entity:"minecraft:mannequin"}} unless data storage {ns}:in a{{entity:"mannequin"}} run function {ns}:v{version}/spawn/sum_o with storage {ns}:in a
-scoreboard players add #id {ns}.data 1
-execute as @e[tag={ns}.new,sort=nearest,limit=1] run function {ns}:v{version}/spawn/init
-""")
-
-	write_versioned_function("spawn/sum_m", f"""
-summon minecraft:mannequin ~ ~ ~ {{Tags:["{ns}.m","{ns}.x","{ns}.new","smithed.entity","smithed.strict"],immovable:true,hide_description:true,Invulnerable:1b,Silent:1b,NoGravity:1b}}
-""")
-
-	write_versioned_function("spawn/sum_o", f"""
-$summon $(entity) ~ ~ ~ {{Tags:["{ns}.m","{ns}.x","{ns}.new","smithed.entity","smithed.strict"],NoAI:1b,Silent:1b,Invulnerable:1b,NoGravity:1b,PersistenceRequired:1b}}
-""")
-
-	write_versioned_function("spawn/tex", f"""
-$data modify entity @s profile set value {{properties:[{{name:"textures",value:"$(texture)"}}]}}
-""")
-
-	write_versioned_function("spawn/utag", f"""
-$tag @s add {ns}.t.$(tag)
-""")
+	write_versioned_function("spawn/summon_mannequin", f"summon minecraft:mannequin ~ ~ ~ {{{tags},immovable:true,hide_description:true,Invulnerable:1b,Silent:1b,NoGravity:1b}}")
+	write_versioned_function("spawn/summon_other", f"$summon $(entity) ~ ~ ~ {{{tags},NoAI:1b,Silent:1b,Invulnerable:1b,NoGravity:1b,PersistenceRequired:1b}}")

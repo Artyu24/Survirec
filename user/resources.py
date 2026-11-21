@@ -5,6 +5,8 @@ from beet.contrib.worldgen import Dimension
 from stewbeet import Mem, set_json_encoder, write_versioned_function
 from stouputils.typing import JsonDict
 
+from .common import Storages
+
 # Constants
 WEAPON_DAMAGE: dict[int, tuple[str, ...]] = {
 	20: ("wooden_pickaxe", "golden_pickaxe"),
@@ -41,10 +43,10 @@ TRIGGERS: dict[str, tuple[JsonDict, str]] = {
 			"entity": {"trigger": "minecraft:player_interacted_with_entity"},
 		},
 		"requirements": [["hit", "block", "entity"]],
-	}, "swing"),
-	"attack": ({"criteria": {"x": {"trigger": "minecraft:player_hurt_entity"}}}, "atk"),
-	"place": ({"criteria": {"x": {"trigger": "minecraft:placed_block"}}}, "place"),
-	"use": ({"criteria": {"x": {"trigger": "minecraft:any_block_use"}}}, "use"),
+	}, "note_swing"),
+	"attack": ({"criteria": {"x": {"trigger": "minecraft:player_hurt_entity"}}}, "note_hit"),
+	"place": ({"criteria": {"x": {"trigger": "minecraft:placed_block"}}}, "note_place"),
+	"use": ({"criteria": {"x": {"trigger": "minecraft:any_block_use"}}}, "note_use"),
 }
 """ Advancement name (record/trigger/<name>) -> (criteria, record/<function> run for a recording player). """
 
@@ -59,6 +61,8 @@ def main() -> None:
 	version: str = Mem.ctx.project_version
 	major, minor, patch = version.split(".")
 	data = Mem.ctx.data
+	functions: str = f"{ns}:v{version}"
+	playback: str = Storages(ns).playback
 
 	# Hidden void dimension: chunk 0 = single blocks, chunk 1 = recording cubes, chunk 2 = look cubes
 	data[f"{ns}:vault"] = set_json_encoder(Dimension({
@@ -80,16 +84,14 @@ def main() -> None:
 	# Damage of the hits played back, read from the held item
 	for damage, items in WEAPON_DAMAGE.items():
 		data[ns].item_tags[f"dmg/d{damage}"] = set_json_encoder(ItemTag({"values": [{"id": f"minecraft:{item}", "required": False} for item in items]}))
-	checks: str = "\n".join(
-		f"execute if items entity @s weapon.mainhand #{ns}:dmg/d{damage} run scoreboard players set #dmg {ns}.data {damage}"
-		for damage in WEAPON_DAMAGE
-	)
-	write_versioned_function("playback/a_hit", f"""
-scoreboard players set #dmg {ns}.data {FIST_DAMAGE}
-{checks}
-execute store result storage {ns}:t hit.d float 0.1 run scoreboard players get #dmg {ns}.data
+	weapon_checks: str = ""
+	for damage in WEAPON_DAMAGE:
+		weapon_checks += f"execute if items entity @s weapon.mainhand #{ns}:dmg/d{damage} run scoreboard players set #hit_damage {ns}.data {damage}\n"
+	write_versioned_function("action/hit", f"""
+scoreboard players set #hit_damage {ns}.data {FIST_DAMAGE}
+{weapon_checks}execute store result storage {playback} hit.damage float 0.1 run scoreboard players get #hit_damage {ns}.data
 tag @s add {ns}.hitter
-execute at @s anchored eyes positioned ^ ^-0.6 ^1 run function {ns}:v{version}/playback/a_hit2 with storage {ns}:t hit
+execute at @s anchored eyes positioned ^ ^-0.6 ^1 run function {functions}/action/hit_in_front with storage {playback} hit
 tag @s remove {ns}.hitter
 """)
 
@@ -99,5 +101,5 @@ tag @s remove {ns}.hitter
 		data[ns].advancements[path] = set_json_encoder(Advancement({**advancement, "rewards": {"function": f"{ns}:{path}"}}), max_level=-1)
 		write_versioned_function(f"record/trigger/{name}", f"""
 advancement revoke @s only {ns}:{path}
-execute if score #{ns}.major load.status matches {major} if score #{ns}.minor load.status matches {minor} if score #{ns}.patch load.status matches {patch} if entity @s[tag={ns}.on] run function {ns}:v{version}/record/{target}
+execute if score #{ns}.major load.status matches {major} if score #{ns}.minor load.status matches {minor} if score #{ns}.patch load.status matches {patch} if entity @s[tag={ns}.recording] run function {functions}/record/{target}
 """)

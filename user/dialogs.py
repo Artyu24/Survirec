@@ -14,7 +14,7 @@ REPOSITORY: str = "https://github.com/Artyu24/Survirec"
 
 MENU_COMMANDS: tuple[tuple[str, str, str, str], ...] = (
 	("■ Arrêter", "red", "stop", "Termine ton enregistrement et affiche les boutons de copie"),
-	("↺ Arrêter + retour", "red", "stop_loop", "Termine et ajoute un retour au départ (boucle propre)"),
+	("Arrêter + retour", "red", "stop_loop", "Termine et ajoute un retour au départ (boucle propre)"),
 	("✖ Annuler", "red", "abort", "Annule ton enregistrement en cours"),
 	("📂 Mes enregistrements", "", "records", "Rejouer, recopier ou supprimer tes séquences"),
 	("📋 Commandes à copier", "", "commands", "Les commandes utiles, prêtes à coller"),
@@ -85,7 +85,7 @@ def main() -> None:
 		],
 		"columns": 1,
 		"actions": [{
-			"label": text("▶ Démarrer", "green"), "width": 200,
+			"label": text("Démarrer", "green"), "width": 200,
 			"tooltip": text("Avec un groupe, l'enregistrement attend le prochain cycle du groupe"),
 			"action": {"type": "minecraft:dynamic/run_command", "template": f'function {api}/start {{with:{{name:"$(name)",every:$(every),group:"$(group)"}}}}'},
 		}],
@@ -100,8 +100,8 @@ def main() -> None:
 			text_input("id", "Nom de l'épreuve", "epreuve1"),
 			text_input("time", "Durée (secondes)", "30", max_length=5),
 			text_input("group", "Groupe", "main"),
-			toggle("sync", "Démarrer au prochain cycle du groupe", False),
-			toggle("tp_back", "Revenir au point de départ à la fin", True),
+			toggle("sync", "Démarrer au prochain cycle du groupe", initial=False),
+			toggle("tp_back", "Revenir au point de départ à la fin", initial=True),
 		],
 		"columns": 1,
 		"actions": [{

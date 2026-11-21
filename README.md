@@ -148,7 +148,7 @@ Pressure plates and tripwires need nothing: the entity walking on them triggers 
 
 Each entity copies a block only once, the first time it changes it: the same copy is used at every loop, so the hidden dimension does not grow while scenes loop. The copies of an entity are freed when it disappears, and `#survirec:v1/kill_all` resets the whole area.
 
-**While recording**, your own changes are undone as soon as the recording ends or is interrupted (stop, cancel, disconnection, `reset`): the entity is the one doing them on playback. Survirec keeps a copy of the 3×3×3 blocks you are looking at, so it knows what was there before you broke, placed or used something.
+**While recording**, your own changes are undone as soon as the recording ends or is interrupted (stop, cancel, disconnection, `reset`): the entity is the one doing them on playback. Survirec keeps a copy of the 3x3x3 blocks you are looking at, so it knows what was there before you broke, placed or used something.
 
 > The dimension is only created when the world or server starts: after installing or updating the datapack, restart instead of `/reload`.
 
@@ -287,6 +287,7 @@ To copy the datapack straight into a world after each build, uncomment `build_co
 | `beet.yml`                 | Project configuration: id, author, version, Minecraft version, pipeline       |
 | `user/link.py`             | Build entry point: calls every module below                                   |
 | `user/api.py`              | Public function tags (defaults, name checks, version guard) and signals       |
+| `user/common.py`           | Command fragments shared by the modules (chat text, buttons, per-axis loops...) |
 | `user/load.py`             | Objectives, world state, tick and unload                                      |
 | `user/record.py`, `playback.py`, `spawn.py`, `challenge.py`, `vault.py`, `core.py` | Recording, playback, spawning, challenges, block copies, management |
 | `user/block.py`            | Block reading on top of Bookshelf Block                                       |

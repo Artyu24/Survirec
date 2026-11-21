@@ -9,13 +9,23 @@ from dataclasses import dataclass
 
 from stewbeet import Mem, write_versioned_function
 
+from .common import PLAYBACK_FIELDS, Storages, compound, say, text
+from .help_pages import PAGES
+
+# Constants
+CHALLENGE_DEFAULTS: str = '{id:"default",time:30,group:"main",sync:0,tp_back:1}'
+""" Default fields of #survirec:v1/challenge (and challenge_cmd, which shows the command instead of starting it). """
+
+SIGNALS: tuple[str, ...] = ("on_record_start", "on_record_stop", "on_spawn")
+""" Function tags the library fires, so a datapack can react to a recording or a playback entity. """
+
 
 @dataclass(frozen=True, slots=True)
 class EntryPoint:
 	""" A public function tag and the versioned function it ends in. """
 
 	target: str
-	""" Versioned function called once the options are merged and checked (ex: "start"). """
+	""" Versioned function called once the options are merged and checked (ex: "record/start_from_call"). """
 
 	defaults: str | None = None
 	""" Default `with` fields as SNBT, `None` for an entry point that reads no option (called without `with`). """
@@ -30,147 +40,126 @@ class EntryPoint:
 	""" Commands run after the checks, before the target. """
 
 
-def entry_points(ns: str, version: str, major: str) -> dict[str, EntryPoint | str]:
+def merge(ns: str, defaults: str, target: str = "options") -> str:
+	""" The `with` compound of the call merged over `defaults`, in <ns>:call <target>. """
+	call: str = Storages(ns).call
+	return f"""$data modify storage {call} arguments set value $(with)
+data modify storage {call} {target} set value {defaults}
+data modify storage {call} {target} merge from storage {call} arguments"""
+
+
+def check_name(ns: str, functions: str, field: str, required: bool, condition: str = "") -> str:
+	""" Sets #has_bad_name to 1 when the option `field` is not a valid name (an empty optional field is valid).
+	`condition`: execute subcommands both commands run behind, ex: "if data storage survirec:call options.tag ".
+	"""
+	run: str = f"execute {condition}run " if condition else ""
+	return f"""{run}data modify storage {Storages(ns).name_check} request set value {{field:"{field}"}}
+{run}function {functions}/name/check_{"required" if required else "optional"} with storage {Storages(ns).name_check} request
+"""
+
+
+def body(ns: str, functions: str, entry: EntryPoint) -> str:
+	""" Commands of an entry point described by an EntryPoint. """
+	if entry.defaults is None:
+		return f"function {functions}/{entry.target}"
+
+	content: str = f"\n{merge(ns, entry.defaults)}\n"
+	if entry.required or entry.optional:
+		content += f"scoreboard players set #has_bad_name {ns}.data 0\n"
+		for field in entry.required:
+			content += check_name(ns, functions, field, required=True)
+		for field in entry.optional:
+			content += check_name(ns, functions, field, required=False)
+		content += f"execute if score #has_bad_name {ns}.data matches 1 run return run function {functions}/name/report_invalid\n"
+	return content + f"""{entry.extra}
+function {functions}/{entry.target} with storage {Storages(ns).call} options
+"""
+
+
+def entry_points(ns: str, functions: str, api: str) -> dict[str, EntryPoint | str]:
 	""" Public function tag name -> how its call is handled (an EntryPoint, or a hand-written body). """
-	v: str = f"{ns}:v{version}"
+	call: str = Storages(ns).call
 	return {
-		"start":			EntryPoint("start", '{name:"rec",every:4,group:"",group_radius:50}', required=("name",), optional=("group",)),
-		"stop":				EntryPoint("stop"),
-		"stop_loop":		EntryPoint("stop_loop"),
-		"abort":			EntryPoint("abort"),
+		"start":			EntryPoint("record/start_from_call", '{name:"rec",every:4,group:"",group_radius:50}', required=("name",), optional=("group",)),
+		"stop":				EntryPoint("record/stop_from_call"),
+		"stop_loop":		EntryPoint("record/stop_loop_from_call"),
+		"abort":			EntryPoint("record/abort_from_call"),
 		"play":				EntryPoint(
-			"again",
-			'{name:"",pos:"~ ~ ~",entity:"minecraft:mannequin",range:0,size:1,loop:1,redstone:0,restore:1,hit_players:0,speed:100,delay:0,'
-			'tag:"",group:"",group_radius:50,grp:0,gl:0,pose:"",skin:"",texture:"",head:"",chest:"",legs:"",feet:"",mainhand:"",offhand:""}',
+			"spawn/from_options",
+			compound({**PLAYBACK_FIELDS, "group_id": "0", "group_loop": "0"}),
 			required=("name",), optional=("tag", "group"),
-			extra=f"""
-execute if data storage {ns}:in cfg.data run function {v}/import
-execute unless data storage {ns}:in cfg{{group:""}} run function {v}/pgroup with storage {ns}:in cfg
-execute summon minecraft:marker run function {v}/spawn/cbpos""",
+			extra=f"""execute if data storage {call} options.data run function {functions}/sequence/import
+execute unless data storage {call} options{{group:""}} run function {functions}/group/prepare_local
+execute summon minecraft:marker run function {functions}/spawn/store_command_block_position""",
 		),
 		"part": f"""
-$data modify storage {ns}:in api set value $(with)
-data modify storage {ns}:in cfg set value {{f:0,d:[],e:[],s:[],a:[]}}
-data modify storage {ns}:in cfg merge from storage {ns}:in api
-execute if data storage {ns}:in cfg{{f:1}} run data modify storage {ns}:t pend set value []
-execute if data storage {ns}:in cfg{{f:1}} run data modify storage {ns}:t pend_e set value []
-execute if data storage {ns}:in cfg{{f:1}} run data modify storage {ns}:t pend_s set value []
-execute if data storage {ns}:in cfg{{f:1}} run data modify storage {ns}:t pend_a set value []
-execute unless data storage {ns}:t pend run data modify storage {ns}:t pend set value []
-execute unless data storage {ns}:t pend_e run data modify storage {ns}:t pend_e set value []
-execute unless data storage {ns}:t pend_s run data modify storage {ns}:t pend_s set value []
-execute unless data storage {ns}:t pend_a run data modify storage {ns}:t pend_a set value []
-data modify storage {ns}:t pend append from storage {ns}:in cfg.d[]
-data modify storage {ns}:t pend_e append from storage {ns}:in cfg.e[]
-data modify storage {ns}:t pend_s append from storage {ns}:in cfg.s[]
-data modify storage {ns}:t pend_a append from storage {ns}:in cfg.a[]
+{merge(ns, "{f:0,d:[],e:[],s:[],a:[]}", "part")}
+function {functions}/sequence/collect_part
 """,
-		"challenge":		EntryPoint("challenge", '{id:"default",time:30,group:"main",sync:0,tp_back:1}', required=("id", "group")),
-		"challenge_cmd":	EntryPoint("menu/chcmd", '{id:"default",time:30,group:"main",sync:0,tp_back:1}', required=("id", "group")),
+		"challenge":		EntryPoint("challenge/start_from_call", CHALLENGE_DEFAULTS, required=("id", "group")),
+		"challenge_cmd":	EntryPoint("menu/check_challenge_time", CHALLENGE_DEFAULTS, required=("id", "group")),
 		"kill": f"""
-$data modify storage {ns}:in api set value $(with)
-data modify storage {ns}:in cfg set value {{}}
-data modify storage {ns}:in cfg merge from storage {ns}:in api
-scoreboard players set #bad {ns}.data 0
-execute if data storage {ns}:in cfg.tag run data modify storage {ns}:v q set value {{f:"tag"}}
-execute if data storage {ns}:in cfg.tag run function {v}/vreq with storage {ns}:v q
-execute if data storage {ns}:in cfg.name run data modify storage {ns}:v q set value {{f:"name"}}
-execute if data storage {ns}:in cfg.name run function {v}/vreq with storage {ns}:v q
-execute if score #bad {ns}.data matches 1 run return run function {v}/badname
-execute if data storage {ns}:in cfg.tag run return run function {v}/kill with storage {ns}:in cfg
-execute if data storage {ns}:in cfg.name run return run function {v}/kill_name with storage {ns}:in cfg
-tellraw @s [{{text:"[Survirec] ",color:"gray"}},{{text:"kill demande un filtre (tag ou name). Pour tout supprimer : ",color:"red"}},{{text:"#{ns}:v{major}/kill_all",color:"gold",bold:true}}]
+{merge(ns, "{}")}
+scoreboard players set #has_bad_name {ns}.data 0
+{check_name(ns, functions, "tag", required=True, condition=f"if data storage {call} options.tag ")}{check_name(ns, functions, "name", required=True, condition=f"if data storage {call} options.name ")}execute if score #has_bad_name {ns}.data matches 1 run return run function {functions}/name/report_invalid
+execute if data storage {call} options.tag run return run function {functions}/kill/by_tag with storage {call} options
+execute if data storage {call} options.name run return run function {functions}/kill/by_name with storage {call} options
+{say(text("kill demande un filtre (tag ou name). Pour tout supprimer : ", "red"), text(f"{api}/kill_all", "gold", "bold:true"))}
 """,
-		"kill_all":			EntryPoint("kill_all"),
-		"group_restart":	EntryPoint("group_restart", '{group:"",radius:50}'),
-		"forget":			EntryPoint("forget", '{name:""}', required=("name",)),
-		"export":			EntryPoint("export", '{name:""}', required=("name",)),
-		"records":			EntryPoint("menu/records"),
-		"range":			EntryPoint("range", "{r:128}"),
+		"kill_all":			EntryPoint("kill/all"),
+		"group_restart":	EntryPoint("group/restart_from_call", '{group:"",radius:50}'),
+		"forget":			EntryPoint("sequence/forget", '{name:""}', required=("name",)),
+		"export":			EntryPoint("record/export_saved", '{name:""}', required=("name",)),
+		"records":			EntryPoint("menu/list_records"),
+		"range":			EntryPoint("range/set_global", "{r:128}"),
 		"settings": f"""
-$data modify storage {ns}:in api set value $(with)
-data modify storage {ns}:in cfg set value {{range:128,move_every:2}}
-data modify storage {ns}:in cfg.range set from storage {ns}:cfg r
-execute store result storage {ns}:in cfg.move_every int 1 run scoreboard players get #step {ns}.data
-data modify storage {ns}:in cfg merge from storage {ns}:in api
-data modify storage {ns}:cfg r set from storage {ns}:in cfg.range
-execute store result score #step {ns}.data run data get storage {ns}:in cfg.move_every
-execute unless score #step {ns}.data matches 1..20 run scoreboard players set #step {ns}.data 2
-tellraw @s [{{text:"[Survirec] ",color:"gray"}},{{text:"Portée : ",color:"green"}},{{storage:"{ns}:cfg",nbt:"r",color:"gold"}},{{text:" blocs · position mise à jour tous les ",color:"green"}},{{score:{{name:"#step",objective:"{ns}.data"}},color:"gold"}},{{text:" ticks",color:"green"}}]
+$data modify storage {call} arguments set value $(with)
+data modify storage {call} options set value {{range:128,move_every:2}}
+data modify storage {call} options.range set from storage {ns}:config range
+execute store result storage {call} options.move_every int 1 run scoreboard players get #move_every {ns}.data
+data modify storage {call} options merge from storage {call} arguments
+data modify storage {ns}:config range set from storage {call} options.range
+execute store result score #move_every {ns}.data run data get storage {call} options.move_every
+execute unless score #move_every {ns}.data matches 1..20 run scoreboard players set #move_every {ns}.data 2
+{say(text("Portée : ", "green"), f'{{storage:"{ns}:config",nbt:"range",color:"gold"}}', text(" blocs · position mise à jour tous les ", "green"),
+	f'{{score:{{name:"#move_every",objective:"{ns}.data"}},color:"gold"}}', text(" ticks", "green"))}
 """,
 		"menu": f"""
 execute unless entity @s[type=minecraft:player] run return fail
 dialog show @s {ns}:menu
 """,
-		"menu_item":		EntryPoint("menu/give"),
-		"commands":			EntryPoint("menu/cmds"),
-		"help":				EntryPoint("help"),
+		"menu_item":		EntryPoint("menu/give_item"),
+		"commands":			EntryPoint("menu/show_commands"),
+		"help":				EntryPoint("help/index"),
 		"help_page": f"""
-$data modify storage {ns}:in api set value $(with)
-data modify storage {ns}:in cfg set value {{page:1}}
-data modify storage {ns}:in cfg merge from storage {ns}:in api
-execute store result score #page {ns}.data run data get storage {ns}:in cfg.page
-execute unless score #page {ns}.data matches 1..{HELP_PAGES} run return run function {v}/help
-execute store result storage {ns}:in cfg.page int 1 run scoreboard players get #page {ns}.data
-function {v}/help/page with storage {ns}:in cfg
+{merge(ns, "{page:1}")}
+execute store result score #page {ns}.data run data get storage {call} options.page
+execute unless score #page {ns}.data matches 1..{len(PAGES)} run return run function {functions}/help/index
+execute store result storage {call} options.page int 1 run scoreboard players get #page {ns}.data
+function {functions}/help/open_page with storage {call} options
 """,
-		"debug":			EntryPoint("debug"),
+		"debug":			EntryPoint("debug/show"),
 		"reset":			EntryPoint("reset"),
 	}
-
-
-HELP_PAGES: int = 5
-""" Pages of the in-game help (help/p1 to help/p<HELP_PAGES>). """
-
-SIGNALS: tuple[str, ...] = ("on_record_start", "on_record_stop", "on_spawn")
-""" Function tags the library fires, so a datapack can react to a recording or a playback entity. """
-
-
-def body(ns: str, version: str, entry: EntryPoint) -> str:
-	""" Commands of an entry point described by an EntryPoint. """
-	v: str = f"{ns}:v{version}"
-	if entry.defaults is None:
-		return f"function {v}/{entry.target}"
-
-	checks: str = ""
-	if entry.required or entry.optional:
-		fields: list[str] = [f"""
-data modify storage {ns}:v q set value {{f:"{field}"}}
-function {v}/{check} with storage {ns}:v q""" for check, names in (("vreq", entry.required), ("vopt", entry.optional)) for field in names]
-		checks = f"""
-scoreboard players set #bad {ns}.data 0{"".join(fields)}
-execute if score #bad {ns}.data matches 1 run return run function {v}/badname"""
-
-	return f"""
-$data modify storage {ns}:in api set value $(with)
-data modify storage {ns}:in cfg set value {entry.defaults}
-data modify storage {ns}:in cfg merge from storage {ns}:in api{checks}{entry.extra}
-function {v}/{entry.target} with storage {ns}:in cfg
-"""
 
 
 def main() -> None:
 	ns: str = Mem.ctx.project_id
 	version: str = Mem.ctx.project_version
 	major, minor, patch = version.split(".")
+	functions: str = f"{ns}:v{version}"
+	api: str = f"#{ns}:v{major}"
 
-	# Only the version resolved by LanternLoad (and fully loaded) answers a call
-	guard: str = f"""
-# Only the newest {ns} loaded in the world runs the call
-execute unless score #{ns}.loaded load.status matches 1 run return fail
-execute unless score #{ns}.major load.status matches {major} run return fail
-execute unless score #{ns}.minor load.status matches {minor} run return fail
-execute unless score #{ns}.patch load.status matches {patch} run return fail
-"""
-	for name, entry in entry_points(ns, version, major).items():
-		content: str = entry if isinstance(entry, str) else body(ns, version, entry)
+	guard: str = f"\n# Only the newest {ns} loaded in the world runs the call\n"
+	for part, value in (("loaded", 1), ("major", major), ("minor", minor), ("patch", patch)):
+		guard += f"execute unless score #{ns}.{part} load.status matches {value} run return fail\n"
+
+	for name, entry in entry_points(ns, functions, api).items():
+		content: str = entry if isinstance(entry, str) else body(ns, functions, entry)
 		write_versioned_function(f"api/{name}", guard + content, tags=[f"{ns}:v{major}/{name}"])
 
-	# Signals are extension points: the library owns the tag, datapacks add their functions to it
+	# The library owns the signal tags, datapacks add their functions to them
 	for signal in SIGNALS:
 		write_versioned_function(f"api/signals/{signal}", """
 # Placeholder so the tag always exists. Add your own function to the tag to react to the event.
 """, tags=[f"{ns}:v{major}/signals/{signal}"])
-
-	# Help page called by the public help_page entry point (its number is checked there)
-	write_versioned_function("help/page", f"$function {ns}:v{version}/help/p$(page)")

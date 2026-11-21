@@ -1,165 +1,142 @@
-""" Challenges: timed recordings that spawn a double of the player. """
+""" Challenges: timed recordings that spawn a double of the player when the time is up. """
 # Imports
 from stewbeet import Mem, write_versioned_function
+
+from .common import ARMED, DIMENSIONS, TELEPORT_SCALES, Storages, build_sequence, check_group_alive, info, kill_tagged, say, text, timer
+
+# Constants
+CHALLENGE_INPUT: tuple[str, ...] = ("id", "time", "group", "sync", "tp_back")
+""" Fields of #survirec:v1/challenge, copied to <ns>:challenge when the challenge starts. """
 
 
 def main() -> None:
 	ns: str = Mem.ctx.project_id
 	version: str = Mem.ctx.project_version
-	major: str = version.split(".")[0]
+	functions: str = f"{ns}:v{version}"
+	api: str = f"#{ns}:v{version.split('.')[0]}"
+	storage: Storages = Storages(ns)
+	challenge: str = storage.challenge
+	recording: str = storage.recording
 
 	write_versioned_function("challenge/arm", f"""
-execute store result score @s {ns}.rwg run data get storage {ns}:c gid
-scoreboard players operation #wg {ns}.data = @s {ns}.rwg
-scoreboard players set #alive {ns}.data 0
-execute as @e[tag={ns}.m] if score @s {ns}.grp = #wg {ns}.data run scoreboard players set #alive {ns}.data 1
-execute if score #alive {ns}.data matches 0 run return run function {ns}:v{version}/challenge/launch
+execute store result score @s {ns}.waited_group run data get storage {challenge} group_id
+scoreboard players operation #waited_group {ns}.data = @s {ns}.waited_group
+{check_group_alive(ns)}
+execute if score #group_alive {ns}.data matches 0 run return run function {functions}/challenge/launch
 tag @s add {ns}.armed
-tellraw @s [{{text:"[Survirec] ",color:"gray"}},{{text:"Enregistrement armé : il démarre au prochain cycle du groupe.",color:"green"}}]
+{info(ARMED)}
 """)
 
-	write_versioned_function("challenge/armchk", f"""
-title @s actionbar [{{text:"⏳ ",color:"gold"}},{{text:"EN ATTENTE DU PROCHAIN CYCLE ",color:"white",bold:true}},{{text:"du groupe",color:"gray"}}]
-scoreboard players operation #wg {ns}.data = @s {ns}.rwg
-scoreboard players set #alive {ns}.data 0
-execute as @e[tag={ns}.m] if score @s {ns}.grp = #wg {ns}.data run scoreboard players set #alive {ns}.data 1
-execute if score #alive {ns}.data matches 0 run function {ns}:v{version}/challenge/launch
+	write_versioned_function("challenge/check_armed", f"""
+title @s actionbar [{text("⏳ ", "gold")},{text("EN ATTENTE DU PROCHAIN CYCLE ", "white", "bold:true")},{text("du groupe", "gray")}]
+scoreboard players operation #waited_group {ns}.data = @s {ns}.waited_group
+{check_group_alive(ns)}
+execute if score #group_alive {ns}.data matches 0 run function {functions}/challenge/launch
 """)
 
 	write_versioned_function("challenge/begin", f"""
-function {ns}:v{version}/record/init
-scoreboard players set @s {ns}.rchal 1
-function #{ns}:v{major}/signals/on_record_start
+function {functions}/record/init
+scoreboard players set @s {ns}.is_challenge 1
+function {api}/signals/on_record_start
 """)
 
 	write_versioned_function("challenge/end", f"""
-tag @s remove {ns}.on
-scoreboard players set @s {ns}.rchal 0
-function {ns}:v{version}/record/wrestore
-function {ns}:v{version}/record/pull
-function {ns}:v{version}/record/drop with storage {ns}:ctx
+tag @s remove {ns}.recording
+scoreboard players set @s {ns}.is_challenge 0
+function {functions}/record/restore_world
+function {functions}/record/pull_state
+function {functions}/record/drop_state with storage {storage.recorder}
 title @s actionbar {{text:""}}
-scoreboard players operation #me {ns}.data = @s {ns}.pid
-function {ns}:v{version}/record/killmk
-data modify storage {ns}:tmp all set value []
-data modify storage {ns}:tmp all append from storage {ns}:tmp chunks[][]
-data modify storage {ns}:tmp all append from storage {ns}:tmp d[]
-data modify storage {ns}:tmp seq set value {{}}
-data modify storage {ns}:tmp seq.n set from storage {ns}:tmp meta.n
-data modify storage {ns}:tmp seq.y set from storage {ns}:tmp meta.y
-data modify storage {ns}:tmp seq.p set from storage {ns}:tmp meta.p
-data modify storage {ns}:tmp seq.e set from storage {ns}:tmp e
-data modify storage {ns}:tmp seq.s set from storage {ns}:tmp s
-data modify storage {ns}:tmp seq.a set from storage {ns}:tmp a
-data modify storage {ns}:tmp seq.d set from storage {ns}:tmp all
-function {ns}:v{version}/challenge/store with storage {ns}:c
-data modify storage {ns}:in prof set value {{}}
-data modify storage {ns}:in prof.id set from entity @s UUID
-scoreboard players set #alive {ns}.data 0
-function {ns}:v{version}/challenge/play with storage {ns}:c
-execute if score #alive {ns}.data matches 1 run tellraw @s [{{text:"[Survirec] ",color:"gray"}},{{text:"Terminé ! Ton double démarrera quand les autres auront fini leur cycle.",color:"green"}}]
-execute unless score #alive {ns}.data matches 1 run tellraw @s [{{text:"[Survirec] ",color:"gray"}},{{text:"Terminé ! Ton double rejoue ton parcours en boucle. ",color:"green"}},{{text:"Recommence en réactivant l'épreuve.",color:"gold"}}]
-execute store result score #tpb {ns}.data run data get storage {ns}:c tp_back
-execute if score #tpb {ns}.data matches 1 run function {ns}:v{version}/challenge/tpback
-function #{ns}:v{major}/signals/on_record_stop
+scoreboard players operation #player_id {ns}.data = @s {ns}.player_id
+function {functions}/record/kill_markers
+data modify storage {recording} keyframes set value []
+data modify storage {recording} keyframes append from storage {recording} chunks[][]
+data modify storage {recording} keyframes append from storage {recording} d[]
+{build_sequence(ns)}
+function {functions}/challenge/store_sequence with storage {challenge}
+data modify storage {storage.call} profile set value {{}}
+data modify storage {storage.call} profile.id set from entity @s UUID
+scoreboard players set #group_alive {ns}.data 0
+function {functions}/challenge/spawn_double with storage {challenge}
+execute if score #group_alive {ns}.data matches 1 run {info("Terminé ! Ton double démarrera quand les autres auront fini leur cycle.")}
+execute unless score #group_alive {ns}.data matches 1 run {say(text("Terminé ! Ton double rejoue ton parcours en boucle. ", "green"), text("Recommence en réactivant l'épreuve.", "gold"))}
+execute store result score #teleport_back {ns}.data run data get storage {challenge} tp_back
+execute if score #teleport_back {ns}.data matches 1 run function {functions}/challenge/teleport_back
+function {api}/signals/on_record_stop
 """)
 
-	write_versioned_function("challenge/gid", f"""
-$execute unless data storage {ns}:grp map.p$(pid)_$(group) run function {ns}:v{version}/challenge/newgid with storage {ns}:c
-$execute store result score #g {ns}.data run data get storage {ns}:grp map.p$(pid)_$(group)
+	write_versioned_function("challenge/resolve_group", f"""
+# one group id per player and group name
+$execute unless data storage {ns}:challenge_groups ids.p$(player_id)_$(group) run function {functions}/challenge/new_group_id with storage {challenge}
+$execute store result score #group {ns}.data run data get storage {ns}:challenge_groups ids.p$(player_id)_$(group)
 """)
 
-	write_versioned_function("challenge/hud", f"""
-scoreboard players operation #s {ns}.data = @s {ns}.rcdur
-scoreboard players operation #s {ns}.data -= @s {ns}.rtime
-scoreboard players add #s {ns}.data 19
-scoreboard players operation #s {ns}.data /= #20 {ns}.data
-scoreboard players operation #mn {ns}.data = #s {ns}.data
-scoreboard players operation #mn {ns}.data /= #60 {ns}.data
-scoreboard players operation #s {ns}.data %= #60 {ns}.data
-execute if score #s {ns}.data matches 10.. run title @s actionbar [{{text:"● ",color:"red"}},{{text:"ENREGISTREMENT  ",color:"white",bold:true}},{{text:"Temps restant : ",color:"gray"}},{{score:{{name:"#mn",objective:"{ns}.data"}},color:"gold",bold:true}},{{text:":",color:"gold",bold:true}},{{score:{{name:"#s",objective:"{ns}.data"}},color:"gold",bold:true}}]
-execute if score #s {ns}.data matches ..9 run title @s actionbar [{{text:"● ",color:"red"}},{{text:"ENREGISTREMENT  ",color:"white",bold:true}},{{text:"Temps restant : ",color:"gray"}},{{score:{{name:"#mn",objective:"{ns}.data"}},color:"gold",bold:true}},{{text:":0",color:"gold",bold:true}},{{score:{{name:"#s",objective:"{ns}.data"}},color:"gold",bold:true}}]
+	write_versioned_function("challenge/show_hud", f"""
+scoreboard players operation #seconds {ns}.data = @s {ns}.challenge_ticks
+scoreboard players operation #seconds {ns}.data -= @s {ns}.record_tick
+scoreboard players add #seconds {ns}.data 19
+{timer(ns, f'{text("● ", "red")},{text("ENREGISTREMENT  ", "white", "bold:true")},{text("Temps restant : ", "gray")}', 'color:"gold",bold:true')}
 """)
 
 	write_versioned_function("challenge/launch", f"""
-execute if score @s {ns}.ratype matches 1 run return run function {ns}:v{version}/record/launch
+execute if score @s {ns}.armed_kind matches 1 run return run function {functions}/record/launch_armed
 tag @s remove {ns}.armed
 title @s actionbar {{text:""}}
-data modify storage {ns}:tmp meta set value {{name:"ch",n:4}}
-function {ns}:v{version}/challenge/begin
-scoreboard players operation #csec {ns}.data = @s {ns}.rcdur
-scoreboard players operation #csec {ns}.data /= #20 {ns}.data
-tellraw @s [{{text:"[Survirec] ",color:"gray"}},{{text:"Épreuve ! Tu as ",color:"green"}},{{score:{{name:"#csec",objective:"{ns}.data"}},color:"gold",bold:true}},{{text:" secondes.",color:"green"}}]
+data modify storage {recording} meta set value {{name:"ch",keyframe_step:4}}
+function {functions}/challenge/begin
+scoreboard players operation #challenge_seconds {ns}.data = @s {ns}.challenge_ticks
+scoreboard players operation #challenge_seconds {ns}.data /= #20 {ns}.data
+{say(text("Épreuve ! Tu as ", "green"), f'{{score:{{name:"#challenge_seconds",objective:"{ns}.data"}},color:"gold",bold:true}}', text(" secondes.", "green"))}
 """)
 
-	write_versioned_function("challenge/newgid", f"""
-scoreboard players add #gid {ns}.data 1
-$execute store result storage {ns}:grp map.p$(pid)_$(group) int 1 run scoreboard players get #gid {ns}.data
+	write_versioned_function("challenge/new_group_id", f"""
+scoreboard players add #next_group_id {ns}.data 1
+$execute store result storage {ns}:challenge_groups ids.p$(player_id)_$(group) int 1 run scoreboard players get #next_group_id {ns}.data
 """)
 
-	write_versioned_function("challenge/newpid", f"""
-scoreboard players add #pid {ns}.data 1
-scoreboard players operation @s {ns}.pid = #pid {ns}.data
+	write_versioned_function("player/new_id", f"""
+scoreboard players add #next_player_id {ns}.data 1
+scoreboard players operation @s {ns}.player_id = #next_player_id {ns}.data
 """)
 
-	write_versioned_function("challenge/play", f"""
-$data modify storage {ns}:in a set value {{name:"ch_$(id)_$(pid)",entity:"minecraft:mannequin",range:0,size:1,loop:0,grp:$(gid),speed:100,offset:0,tag:"sv_$(id)_$(pid)",pose:"",skin:"",texture:"",head:"",chest:"",legs:"",feet:"",mainhand:"",offhand:""}}
-function {ns}:v{version}/challenge/spawn with storage {ns}:tmp meta
+	write_versioned_function("challenge/spawn_double", f"""
+$data modify storage {storage.call} spawn set value {{name:"ch_$(id)_$(player_id)",entity:"minecraft:mannequin",range:0,size:1,loop:0,group_id:$(group_id),speed:100,delay:0,tag:"sv_$(id)_$(player_id)",pose:"",skin:"",texture:"",head:"",chest:"",legs:"",feet:"",mainhand:"",offhand:""}}
+function {functions}/challenge/spawn_at_start with storage {recording} meta
 """)
 
-	write_versioned_function("challenge/prekill", f"""
-scoreboard players set #kres {ns}.data 1
-$execute as @e[tag={ns}.t.sv_$(id)_$(pid)] run function {ns}:v{version}/playback/delete
-scoreboard players set #kres {ns}.data 0
-""")
+	write_versioned_function("challenge/kill_previous_double", kill_tagged(ns, functions, f"{ns}.tag.sv_$(id)_$(player_id)"))
+	write_versioned_function("challenge/save_settings", f"$data modify storage {ns}:in_progress players.p$(player_id).challenge set from storage {challenge}")
+	write_versioned_function("challenge/spawn_at_start", f"$execute positioned $(start_x) $(start_y) $(start_z) run function {functions}/spawn/summon")
 
-	write_versioned_function("challenge/save", f"""
-$data modify storage {ns}:rec p.p$(pid).c set from storage {ns}:c
-""")
-
-	write_versioned_function("challenge/spawn", f"""
-$execute positioned $(sx) $(sy) $(sz) run function {ns}:v{version}/spawn/spawn
-""")
-
+	copies: str = ""
+	for key in CHALLENGE_INPUT:
+		copies += f"data modify storage {challenge} {key} set from storage {storage.challenge_call} {key}\n"
 	write_versioned_function("challenge/start", f"""
 execute unless entity @s[type=minecraft:player] run return fail
-# une plaque de pression redéclenche en continu : on ignore sans message
-execute if entity @s[tag={ns}.on] run return 0
+# a pressure plate fires again and again: ignored without a message
+execute if entity @s[tag={ns}.recording] run return 0
 execute if entity @s[tag={ns}.armed] run return 0
-data modify storage {ns}:c id set from storage {ns}:cin id
-data modify storage {ns}:c time set from storage {ns}:cin time
-data modify storage {ns}:c group set from storage {ns}:cin group
-data modify storage {ns}:c sync set from storage {ns}:cin sync
-data modify storage {ns}:c tp_back set from storage {ns}:cin tp_back
-execute store result score @s {ns}.rcdur run data get storage {ns}:c time 20
-execute unless score @s {ns}.rcdur matches 20.. run return run tellraw @s {{text:"[Survirec] time doit être d'au moins 1 seconde.",color:"red"}}
-execute unless score @s {ns}.pid matches 1.. run function {ns}:v{version}/challenge/newpid
-execute store result storage {ns}:c pid int 1 run scoreboard players get @s {ns}.pid
-function {ns}:v{version}/challenge/gid with storage {ns}:c
-execute store result storage {ns}:c gid int 1 run scoreboard players get #g {ns}.data
-function {ns}:v{version}/challenge/prekill with storage {ns}:c
-function {ns}:v{version}/playback/grpcheck
-function {ns}:v{version}/record/ctx
-function {ns}:v{version}/challenge/save with storage {ns}:ctx
-scoreboard players set @s {ns}.ratype 0
-execute store result score #sync {ns}.data run data get storage {ns}:c sync
-execute if score #sync {ns}.data matches 1 run return run function {ns}:v{version}/challenge/arm
-function {ns}:v{version}/challenge/launch
+{copies}execute store result score @s {ns}.challenge_ticks run data get storage {challenge} time 20
+execute unless score @s {ns}.challenge_ticks matches 20.. run return run tellraw @s {text("[Survirec] time doit être d'au moins 1 seconde.", "red")}
+execute unless score @s {ns}.player_id matches 1.. run function {functions}/player/new_id
+execute store result storage {challenge} player_id int 1 run scoreboard players get @s {ns}.player_id
+function {functions}/challenge/resolve_group with storage {challenge}
+execute store result storage {challenge} group_id int 1 run scoreboard players get #group {ns}.data
+function {functions}/challenge/kill_previous_double with storage {challenge}
+function {functions}/group/check
+function {functions}/record/store_player_id
+function {functions}/challenge/save_settings with storage {storage.recorder}
+scoreboard players set @s {ns}.armed_kind 0
+execute store result score #is_synced {ns}.data run data get storage {challenge} sync
+execute if score #is_synced {ns}.data matches 1 run return run function {functions}/challenge/arm
+function {functions}/challenge/launch
 """)
 
-	write_versioned_function("challenge/store", f"""
-$data modify storage {ns}:data seqs.ch_$(id)_$(pid) set from storage {ns}:tmp seq
-""")
+	write_versioned_function("challenge/store_sequence", f"$data modify storage {ns}:data seqs.ch_$(id)_$(player_id) set from storage {recording} sequence")
 
-	write_versioned_function("challenge/tpback", f"""
-execute store result storage {ns}:tmp tpb.x double 0.001 run scoreboard players get @s {ns}.rox
-execute store result storage {ns}:tmp tpb.y double 0.001 run scoreboard players get @s {ns}.roy
-execute store result storage {ns}:tmp tpb.z double 0.001 run scoreboard players get @s {ns}.roz
-execute store result storage {ns}:tmp tpb.yaw double 0.01 run scoreboard players get @s {ns}.royw
-execute store result storage {ns}:tmp tpb.pitch double 0.01 run scoreboard players get @s {ns}.ropt
-function {ns}:v{version}/challenge/tpback2 with storage {ns}:tmp tpb
-""")
-
-	write_versioned_function("challenge/tpback2", f"""
-$tp @s $(x) $(y) $(z) $(yaw) $(pitch)
+	start_point: str = ""
+	for name in DIMENSIONS:
+		start_point += f"execute store result storage {recording} start_point.{name} double {TELEPORT_SCALES[name]} run scoreboard players get @s {ns}.record_start_{name}\n"
+	write_versioned_function("challenge/teleport_back", f"""
+{start_point}function {functions}/playback/teleport with storage {recording} start_point
 """)

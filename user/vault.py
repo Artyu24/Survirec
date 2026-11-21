@@ -1,142 +1,151 @@
-""" Copies of the blocks changed by entities, kept in the survirec:vault dimension. """
+""" Copies of the blocks changed by entities, kept in the survirec:vault dimension (chunk 0), restored at every loop. """
 # Imports
+from dataclasses import dataclass
+
 from stewbeet import Mem, write_versioned_function
+
+from .common import Storages, store_position
 
 # Constants
 CAGE_LAYERS: tuple[tuple[int, int], ...] = ((-64, 31), (32, 127), (128, 223), (224, 319))
 """ Height ranges filled one by one (a single fill is limited to 32768 blocks). """
 
 
+@dataclass(frozen=True, slots=True)
+class SlotAxis:
+	""" How the block slot index #next_block_slot gives one coordinate of the slot: operations, then x2 and a shift. """
+
+	axis: str
+	operations: tuple[str, ...]
+	shift: str
+	amount: int
+
+
+SLOT_AXES: tuple[SlotAxis, ...] = (
+	SlotAxis("x", ("%= #7",), "add", 1), SlotAxis("z", ("/= #7", "%= #7"), "add", 1), SlotAxis("y", ("/= #49",), "remove", 63),
+)
+""" One slot out of two, 7 x 7 per layer: x and z from 1 to 13, y from -63. """
+
+
 def cage(ns: str, chunk: int) -> str:
 	""" Fill a vault chunk with barriers: every copy is isolated (no fall, no flow, no update between copies). """
-	x: int = chunk * 16
-	return "\n".join(f"execute in {ns}:vault run fill {x} {y1} 0 {x + 15} {y2} 15 minecraft:barrier strict" for y1, y2 in CAGE_LAYERS)
+	start: int = chunk * 16
+	content: str = ""
+	for bottom, top in CAGE_LAYERS:
+		content += f"execute in {ns}:vault run fill {start} {bottom} 0 {start + 15} {top} 15 minecraft:barrier strict\n"
+	return content
 
 
 def main() -> None:
 	ns: str = Mem.ctx.project_id
 	version: str = Mem.ctx.project_version
+	functions: str = f"{ns}:v{version}"
+	playback: str = Storages(ns).playback
 
-	write_versioned_function("vault/bk", f"""
-# positionné sur le bloc, en tant qu'entité. {ns}:t bka = {{x,y,z,m}} (m = "strict" ou "replace" pour la remise en place)
-# Une seule copie par bloc : celle d'origine. Elle sert à chaque remise en place, on ne la refait jamais.
-execute unless score @s {ns}.rst matches 1.. run return 0
-execute unless data storage {ns}:cfg vault run return 0
-execute store result storage {ns}:t bka.id int 1 run scoreboard players get @s {ns}.id
-scoreboard players set #has {ns}.data 0
-function {ns}:v{version}/vault/has with storage {ns}:t bka
-execute if score #has {ns}.data matches 1 run return 0
-execute if data storage {ns}:cfg vfree[0] run return run function {ns}:v{version}/vault/reuse
-scoreboard players operation #c7 {ns}.data = #vs {ns}.data
-scoreboard players operation #c7 {ns}.data %= #7 {ns}.data
-scoreboard players operation #c7 {ns}.data *= #2 {ns}.data
-execute store result storage {ns}:t bka.vx int 1 run scoreboard players add #c7 {ns}.data 1
-scoreboard players operation #c7 {ns}.data = #vs {ns}.data
-scoreboard players operation #c7 {ns}.data /= #7 {ns}.data
-scoreboard players operation #c7 {ns}.data %= #7 {ns}.data
-scoreboard players operation #c7 {ns}.data *= #2 {ns}.data
-execute store result storage {ns}:t bka.vz int 1 run scoreboard players add #c7 {ns}.data 1
-scoreboard players operation #c7 {ns}.data = #vs {ns}.data
-scoreboard players operation #c7 {ns}.data /= #49 {ns}.data
-scoreboard players operation #c7 {ns}.data *= #2 {ns}.data
-execute store result storage {ns}:t bka.vy int 1 run scoreboard players remove #c7 {ns}.data 63
-scoreboard players add #vs {ns}.data 1
-execute if score #vs {ns}.data matches 9359.. run scoreboard players set #vs {ns}.data 0
-function {ns}:v{version}/vault/bk2 with storage {ns}:t bka
+	slot: str = ""
+	for slot_axis in SLOT_AXES:
+		slot += f"scoreboard players operation #slot_index {ns}.data = #next_block_slot {ns}.data\n"
+		for operation in slot_axis.operations:
+			slot += f"scoreboard players operation #slot_index {ns}.data {operation} {ns}.data\n"
+		slot += f"""scoreboard players operation #slot_index {ns}.data *= #2 {ns}.data
+execute store result storage {playback} block_copy.vault_{slot_axis.axis} int 1 run scoreboard players {slot_axis.shift} #slot_index {ns}.data {slot_axis.amount}
+"""
+	write_versioned_function("vault/back_up", f"""
+# as the entity, at the block; {playback} block_copy = {{x,y,z,mode}}, mode: "strict" or "replace" when it is put back
+# only the first copy of a block is kept: it is the original state, restored at every loop
+execute unless score @s {ns}.restore_mode matches 1.. run return 0
+execute unless data storage {ns}:config are_blocks_ready run return 0
+execute store result storage {playback} block_copy.instance_id int 1 run scoreboard players get @s {ns}.instance_id
+scoreboard players set #has_copy {ns}.data 0
+function {functions}/vault/has_copy with storage {playback} block_copy
+execute if score #has_copy {ns}.data matches 1 run return 0
+execute if data storage {ns}:config free_block_slots[0] run return run function {functions}/vault/reuse_slot
+{slot}scoreboard players add #next_block_slot {ns}.data 1
+execute if score #next_block_slot {ns}.data matches 9359.. run scoreboard players set #next_block_slot {ns}.data 0
+function {functions}/vault/copy_block with storage {playback} block_copy
 """)
 
-	write_versioned_function("vault/bk2", f"""
-$clone $(x) $(y) $(z) $(x) $(y) $(z) to {ns}:vault $(vx) $(vy) $(vz) strict
-$data modify storage {ns}:inst i$(id).bk append from storage {ns}:t bka
+	write_versioned_function("vault/copy_block", f"""
+$clone $(x) $(y) $(z) $(x) $(y) $(z) to {ns}:vault $(vault_x) $(vault_y) $(vault_z) strict
+$data modify storage {ns}:instances i$(instance_id).block_copies append from storage {playback} block_copy
 """)
 
 	write_versioned_function("vault/free", f"""
-# l'entité disparaît : ses emplacements redeviennent des barrières et sont réutilisables
-execute store result storage {ns}:t rv.id int 1 run scoreboard players get @s {ns}.id
-function {ns}:v{version}/vault/rs0 with storage {ns}:t rv
-execute if data storage {ns}:t bkl[0] run function {ns}:v{version}/vault/free1
+# the entity is removed: its slots become barriers again, free for the next copies
+execute store result storage {playback} instance_id int 1 run scoreboard players get @s {ns}.instance_id
+function {functions}/vault/pull_copies with storage {playback}
+execute if data storage {playback} block_copies[0] run function {functions}/vault/free_next
 """)
 
-	write_versioned_function("vault/free1", f"""
-function {ns}:v{version}/vault/free2 with storage {ns}:t bkl[-1]
-data remove storage {ns}:t bkl[-1]
-execute if data storage {ns}:t bkl[0] run function {ns}:v{version}/vault/free1
+	write_versioned_function("vault/free_next", f"""
+function {functions}/vault/free_slot with storage {playback} block_copies[-1]
+data remove storage {playback} block_copies[-1]
+execute if data storage {playback} block_copies[0] run function {functions}/vault/free_next
 """)
 
-	write_versioned_function("vault/free2", f"""
-$execute in {ns}:vault run setblock $(vx) $(vy) $(vz) minecraft:barrier strict
-$data modify storage {ns}:cfg vfree append value {{vx:$(vx),vy:$(vy),vz:$(vz)}}
+	write_versioned_function("vault/free_slot", f"""
+$execute in {ns}:vault run setblock $(vault_x) $(vault_y) $(vault_z) minecraft:barrier strict
+$data modify storage {ns}:config free_block_slots append value {{vault_x:$(vault_x),vault_y:$(vault_y),vault_z:$(vault_z)}}
 """)
 
-	write_versioned_function("vault/has", f"""
-$execute if data storage {ns}:inst i$(id).bk[{{x:$(x),y:$(y),z:$(z)}}] run scoreboard players set #has {ns}.data 1
+	write_versioned_function("vault/has_copy", f"$execute if data storage {ns}:instances i$(instance_id).block_copies[{{x:$(x),y:$(y),z:$(z)}}] run scoreboard players set #has_copy {ns}.data 1")
+
+	write_versioned_function("vault/back_up_here", f"""
+# #restore_strict 1: put back without block updates (both halves of a door or bed)
+data modify storage {playback} block_copy set value {{x:0,y:0,z:0,mode:"replace"}}
+execute if score #restore_strict {ns}.data matches 1 run data modify storage {playback} block_copy.mode set value "strict"
+execute summon minecraft:marker run function {functions}/vault/store_position
+function {functions}/vault/back_up
 """)
 
-	write_versioned_function("vault/here", f"""
-# sauvegarde le bloc courant ; #bkm 1 = remise en place sans mise à jour (blocs doubles)
-data modify storage {ns}:t bka set value {{x:0,y:0,z:0,m:"replace"}}
-execute if score #bkm {ns}.data matches 1 run data modify storage {ns}:t bka.m set value "strict"
-execute summon minecraft:marker run function {ns}:v{version}/vault/herepos
-function {ns}:v{version}/vault/bk
-""")
-
-	write_versioned_function("vault/herepos", f"""
-execute store result storage {ns}:t bka.x int 1 run data get entity @s Pos[0]
-execute store result storage {ns}:t bka.y int 1 run data get entity @s Pos[1]
-execute store result storage {ns}:t bka.z int 1 run data get entity @s Pos[2]
+	write_versioned_function("vault/store_position", f"""
+{store_position(f"{playback} block_copy.")}
 kill @s
 """)
 
-	write_versioned_function("vault/prep", f"""
-# cage de barrières : chaque copie est isolée (ni chute, ni écoulement, ni mise à jour entre copies)
-{cage(ns, 0)}
-data modify storage {ns}:cfg vault set value 1b
+	write_versioned_function("vault/prepare_blocks", f"""
+{cage(ns, 0)}data modify storage {ns}:config are_blocks_ready set value 1b
 """)
 
-	write_versioned_function("vault/prep2", f"""
-{cage(ns, 1)}
-{cage(ns, 2)}
-data modify storage {ns}:cfg vault2 set value 1b
+	write_versioned_function("vault/prepare_cubes", f"""
+{cage(ns, 1)}{cage(ns, 2)}data modify storage {ns}:config are_cubes_ready set value 1b
 """)
 
 	write_versioned_function("vault/restore", f"""
-# remet en place, dans l'ordre inverse, les blocs modifiés par cette entité
-execute store result storage {ns}:t rv.id int 1 run scoreboard players get @s {ns}.id
-function {ns}:v{version}/vault/rs0 with storage {ns}:t rv
-execute if data storage {ns}:t bkl[0] at @s run function {ns}:v{version}/vault/rs1
+# blocks changed by this entity, put back in reverse order
+execute store result storage {playback} instance_id int 1 run scoreboard players get @s {ns}.instance_id
+function {functions}/vault/pull_copies with storage {playback}
+execute if data storage {playback} block_copies[0] at @s run function {functions}/vault/restore_next
 """)
 
-	write_versioned_function("vault/reuse", f"""
-# emplacement libéré par une entité disparue
-data modify storage {ns}:t bka.vx set from storage {ns}:cfg vfree[-1].vx
-data modify storage {ns}:t bka.vy set from storage {ns}:cfg vfree[-1].vy
-data modify storage {ns}:t bka.vz set from storage {ns}:cfg vfree[-1].vz
-data remove storage {ns}:cfg vfree[-1]
-function {ns}:v{version}/vault/bk2 with storage {ns}:t bka
+	reused: str = ""
+	for axis in ("vault_x", "vault_y", "vault_z"):
+		reused += f"data modify storage {playback} block_copy.{axis} set from storage {ns}:config free_block_slots[-1].{axis}\n"
+	write_versioned_function("vault/reuse_slot", f"""
+{reused}data remove storage {ns}:config free_block_slots[-1]
+function {functions}/vault/copy_block with storage {playback} block_copy
 """)
 
-	write_versioned_function("vault/rs0", f"""
-data modify storage {ns}:t bkl set value []
-$data modify storage {ns}:t bkl set from storage {ns}:inst i$(id).bk
+	write_versioned_function("vault/pull_copies", f"""
+data modify storage {playback} block_copies set value []
+$data modify storage {playback} block_copies set from storage {ns}:instances i$(instance_id).block_copies
 """)
 
-	write_versioned_function("vault/rs1", f"""
-function {ns}:v{version}/vault/rs2 with storage {ns}:t bkl[-1]
-data remove storage {ns}:t bkl[-1]
-execute if data storage {ns}:t bkl[0] run function {ns}:v{version}/vault/rs1
+	write_versioned_function("vault/restore_next", f"""
+function {functions}/vault/restore_copy with storage {playback} block_copies[-1]
+data remove storage {playback} block_copies[-1]
+execute if data storage {playback} block_copies[0] run function {functions}/vault/restore_next
 """)
 
-	write_versioned_function("vault/rs2", f"""
-$clone from {ns}:vault $(vx) $(vy) $(vz) $(vx) $(vy) $(vz) $(x) $(y) $(z) $(m)
-""")
+	write_versioned_function("vault/restore_copy", f"$clone from {ns}:vault $(vault_x) $(vault_y) $(vault_z) $(vault_x) $(vault_y) $(vault_z) $(x) $(y) $(z) $(mode)")
 
-	write_versioned_function("vault/try", f"""
-execute unless data storage {ns}:cfg vault in {ns}:vault if loaded 0 0 0 run function {ns}:v{version}/vault/prep
-execute unless data storage {ns}:cfg vault2 in {ns}:vault if loaded 16 0 0 if loaded 32 0 0 run function {ns}:v{version}/vault/prep2
+	write_versioned_function("vault/try_prepare", f"""
+# the dimension is only loaded some ticks after the world starts
+execute unless data storage {ns}:config are_blocks_ready in {ns}:vault if loaded 0 0 0 run function {functions}/vault/prepare_blocks
+execute unless data storage {ns}:config are_cubes_ready in {ns}:vault if loaded 16 0 0 if loaded 32 0 0 run function {functions}/vault/prepare_cubes
 """)
 
 	write_versioned_function("vault/wipe", f"""
-{cage(ns, 0)}
-data modify storage {ns}:cfg vfree set value []
-scoreboard players set #vs {ns}.data 0
+{cage(ns, 0)}data modify storage {ns}:config free_block_slots set value []
+scoreboard players set #next_block_slot {ns}.data 0
 """)
