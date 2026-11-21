@@ -1,14 +1,25 @@
-"""Survirec: hooks the hand-written library (src/) into StewBeet's versioned load and tick."""
+""" Survirec: every file of the library is generated here, under survirec:v<version>/ (see the README, Development). """
+# Imports
 from beet import Context
-from stewbeet import write_load_file, write_tick_file
+
+from . import api, block, challenge, core, dialogs, help_pages, load, menu, playback, record, resources, spawn, vault
 
 
+# Main function is run just before finalyzing the build process (zip, headers, lang, ...)
 def beet_default(ctx: Context) -> None:
-    # Runs in <id>:v<version>/load/confirm_load (LanternLoad convention, once the version is resolved)
-    write_load_file("""
-function survirec:v1/private/load
-""")
-    # Runs every tick in <id>:v<version>/tick
-    write_tick_file("""
-function survirec:v1/private/tick
-""")
+	# Load, tick and unload, then the public entry points and everything they call into
+	load.main()
+	api.main()
+	core.main()
+	record.main()
+	playback.main()
+	spawn.main()
+	challenge.main()
+	vault.main()
+	block.main()
+	menu.main()
+	help_pages.main()
+
+	# Non-function resources
+	resources.main()
+	dialogs.main()

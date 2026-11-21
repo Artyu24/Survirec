@@ -12,8 +12,8 @@ No mods, no resource pack: only commands.
 - ⚡ Cheap playback: scores and one `tp` macro per entity and tick. Stationary entities are not teleported, and entities with no player nearby are paused.
 - 🧩 Follows the [Smithed conventions](https://docs.smithed.dev/conventions/).
 
-📦 **Embedded library**: package it inside your datapack rather than shipping it separately.
-Developed for Minecraft Java **26.2**. No dependency.
+📦 **Embedded library**: package it inside your datapack rather than shipping it separately. Several datapacks can embed different versions of Survirec in the same world: only the newest one runs (see Conventions).
+Developed for Minecraft Java **26.2**. Depends on [Bookshelf Block](https://docs.mcbookshelf.dev/en/latest/modules/block.html) (`bs.block`), already included in `Survirec_datapack_with_libs.zip`.
 
 Made by **Artyu24**.
 
@@ -48,6 +48,7 @@ Run `function #survirec:v1/help` for an in-game, paginated help.
 | `#survirec:v1/range`        | `r` (`128`). Animation range in blocks                                           |
 | `#survirec:v1/settings`     | `range` (`128`), `move_every` (`2`). Missing fields keep their value. See Performance |
 | `#survirec:v1/help`         | none. In-game help                                                               |
+| `#survirec:v1/help_page`    | `page` (`1`). Opens one page of the in-game help (`1` to `5`)                    |
 | `#survirec:v1/reset`        | none. Cancels every recording and clears the recording data                      |
 | `#survirec:v1/debug`        | none. Lists the animated entities                                                |
 | `#survirec:v1/menu`         | none. Opens the Survirec menu (run as a player)                                  |
@@ -65,7 +66,7 @@ function #survirec:v1/kill {with:{tag:"door"}}
 
 Following an NPC that stops when you get more than 5 blocks away: `function #survirec:v1/play {with:{name:"npc",range:5}}`.
 
-Only the `#survirec:v1/...` function tags are public. Everything under `survirec:v1/private/` may change.
+Only the `#survirec:v1/...` function tags are public. Everything under `survirec:v<version>/` (for example `survirec:v1.1.0/`) is internal and changes with every version.
 
 ## Menu
 
@@ -78,7 +79,7 @@ The menu is also in the pause screen, under the Smithed *Data Packs* list.
 
 Every finished recording is kept in the world under its name: `#survirec:v1/play {with:{name:"walk"}}` replays it without the copied data.
 
-The item is a camera head ([minecraft-heads.com](https://minecraft-heads.com), Custom Head ID 120246). To use another head, paste its base64 `textures` value in `src/data/survirec/function/v1/private/menu/texture.mcfunction` (empty = spyglass look).
+The item is a camera head ([minecraft-heads.com](https://minecraft-heads.com), Custom Head ID 120246). To use another head, paste its base64 `textures` value in `MENU_HEAD_TEXTURE` (`user/menu.py`) and rebuild (empty = spyglass look).
 
 > The menu and every chat button run `/function`, so they only work for operators. A non-operator who gets the item can open the menu but no button does anything.
 
@@ -108,7 +109,7 @@ The command copied after a recording starts with these fields. Edit them before 
 | `skin`                                 | Player name (mannequin only)                                            |
 | `texture`                              | Base64 `textures` property value, used if `skin` is empty               |
 | `head` `chest` `legs` `feet` `mainhand` `offhand` | Item overrides. Empty keeps the recorded equipment            |
-| `data`                                 | The recorded sequence (`f`, `n`, `y`, `p`, `d`, `e`, `s`). Do not edit  |
+| `data`                                 | The recorded sequence (`f`, `n`, `y`, `p`, `d`, `e`, `s`, `a`). Do not edit |
 
 ## Challenge groups
 
@@ -151,7 +152,7 @@ Each entity copies a block only once, the first time it changes it: the same cop
 
 > The dimension is only created when the world or server starts: after installing or updating the datapack, restart instead of `/reload`.
 
-Limits: hits in the air and blocks broken while not looking at them are not recorded. Enchantments and attack cooldown are not taken into account. Blocks are recognized from the list in `tools/blocks.txt`; an unknown block is broken normally but cannot be placed.
+Limits: hits in the air and blocks broken while not looking at them are not recorded. Enchantments and attack cooldown are not taken into account. Blocks and their full state are read with Bookshelf's block module, so every block of the game version can be placed back.
 
 ## Groups for classic playback
 
@@ -215,14 +216,16 @@ data modify storage survirec:data seqs.walk set value {n:4,y:0,p:0,d:[[120,0,-34
 | `d` | Keyframes `[dx,dy,dz,dyaw,dpitch,flags]`: deltas from the previous keyframe, in thousandths of a block and hundredths of a degree. `flags`: `1` sneaking, `2` swimming, `4` gliding |
 | `e` | Equipment events `{k:<keyframe index>,v:{<equipment>}}` |
 | `s` | Ticks at which an arm swing happened |
+| `a` | Actions `{t:<tick>,k:<kind>}`. `k`: `1` hit, `2` use, `3` place, `4` break. Except hits, `x` `y` `z` give the block relative to the start block; a place also has `b` (the block with its state) and, for a door or a bed, `p` (the other half) |
 
 Then play it with `#survirec:v1/play {with:{name:"walk"}}`.
 
 # 🧩 Conventions
 
 - **Namespacing**: every function, tag, score, team and storage is prefixed with `survirec`.
-- **Versioning**: all the code lives under `survirec:v1/`, and the public entry points are the `#survirec:v1/...` function tags. A future `v2` can live next to it without breaking `v1` users.
-- **Pack ID and loading**: `pack.mcmeta` (with `"id": "survirec"`) and the versioned load ([LanternLoad](https://github.com/LanternMC/load)) are generated by StewBeet from `beet.yml`.
+- **Versioning**: every function and advancement lives under `survirec:v<version>/` (for example `survirec:v1.1.0/`), so two versions never overwrite each other's files. The public entry points are the `#survirec:v1/...` function tags (major version only): each version adds its own `survirec:v<version>/api/<name>` to them, behind a version guard. A future `v2` can live next to it without breaking `v1` users.
+- **Pack ID and loading**: `pack.mcmeta` (with `"id": "survirec"`) and the versioned load ([LanternLoad](https://github.com/LanternMC/load)) are generated by StewBeet from `beet.yml`. When several datapacks embed Survirec, the `enumerate` / `resolve` tags elect the newest version: only that one loads, ticks, answers the `#survirec:v1/...` tags and records the actions (its advancements check the version too).
+- **Dependencies**: StewBeet finds the `#bs.block:` calls, checks the Bookshelf Block version at load (with a clickable message when it is missing) and welds the module into `Survirec_datapack_with_libs.zip`.
 - **Pack enabled tags** (`#survirec:installed`, `#survirec:major`...): generated by StewBeet from Minecraft 26.3, where the registry they need exists.
 - **Data pack menu dialog**: `survirec:about` is listed in `#smithed:data_packs` (pause screen), with `required: false`.
 - **Tag specification**: spawned entities carry `smithed.entity` and `smithed.strict`; the stop item carries `{smithed:{ignore:{everything:1b}}}`, the menu item `{smithed:{ignore:{functionality:1b,crafting:1b}}}`.
@@ -256,37 +259,48 @@ To go further: lower `range` so that only the entities near players play, raise 
 
 # 🛠️ Development
 
-Built with [StewBeet](https://github.com/Stoupy51/StewBeet) (a Beet framework), like the other Smithed-style libraries.
+Built with [StewBeet](https://github.com/Stoupy51/StewBeet) (a Beet framework), like the other Smithed-style libraries ([Cinemalya](https://github.com/Stoupy51/Cinemalya), [CommonSignals](https://github.com/Stoupy51/CommonSignals)...).
+There is no hand-written datapack file: every function, tag, advancement, dialog and the dimension are generated by the Python code in `user/`, under the version of `beet.yml`.
 
 ## Build locally
 
-Requirements: [Python](https://www.python.org/downloads/) **3.12 or newer** with `pip`.
+Requirements: [Python](https://www.python.org/downloads/) **3.14 or newer** and [uv](https://docs.astral.sh/uv/).
 
 ```
-pip install stewbeet
-stewbeet
+uv run stewbeet
 ```
 
-Run `stewbeet` from the project folder (the one containing `beet.yml`). The datapack zip is generated in `build/`.
-To copy it straight into a world after each build, uncomment `build_copy_destinations` in `beet.yml`.
+Run it from the project folder (the one containing `beet.yml`). `build/` then holds:
+
+| File | Content |
+| ---- | ------- |
+| `Survirec_datapack.zip` | Survirec alone (Bookshelf Block must be installed separately) |
+| `Survirec_datapack_with_libs.zip` | Survirec with Bookshelf Block merged in (Smithed Weld): the one to ship |
+
+The first build downloads Bookshelf Block from Modrinth (cached in `.beet_cache/`). `uv run stewbeet watch` rebuilds on every change.
+To copy the datapack straight into a world after each build, uncomment `build_copy_destinations` in `beet.yml`.
 
 ## Project layout
 
 | Path                       | Role                                                                          |
 | -------------------------- | ----------------------------------------------------------------------------- |
 | `beet.yml`                 | Project configuration: id, author, version, Minecraft version, pipeline       |
-| `src/data/survirec/`       | Hand-written functions, function tags and advancement (loaded by `data_pack.load`) |
-| `tools/gen_blocks.py`      | Generates the block recognition (`tags/block/b`, `bk/t`, `bk/props`) from `tools/blocks.txt`. Run it after editing the list, for example for a new Minecraft version |
-| `user/link.py`             | Hooks `survirec:v1/private/load` and `tick` into StewBeet's versioned load and tick |
+| `user/link.py`             | Build entry point: calls every module below                                   |
+| `user/api.py`              | Public function tags (defaults, name checks, version guard) and signals       |
+| `user/load.py`             | Objectives, world state, tick and unload                                      |
+| `user/record.py`, `playback.py`, `spawn.py`, `challenge.py`, `vault.py`, `core.py` | Recording, playback, spawning, challenges, block copies, management |
+| `user/block.py`            | Block reading on top of Bookshelf Block                                       |
+| `user/menu.py`, `help_pages.py`, `dialogs.py` | Menu item, chat help, dialogs                              |
+| `user/resources.py`        | Dimension, block and item tags, advancements                                  |
 | `upload.py`                | Publishes a release (GitHub, Modrinth, Smithed)                               |
 | `CHANGELOG.md`             | Changes of every version                                                      |
 
-StewBeet generates `pack.mcmeta`, the versioned load ([LanternLoad](https://github.com/LanternMC/load)) and the unload function.
+StewBeet generates `pack.mcmeta`, the versioned load ([LanternLoad](https://github.com/LanternMC/load)), the dependency check, the scoreboard constants (`#<n> survirec.data`), the function headers and the unload function.
 The version lives in `beet.yml` only.
 
 ## Publish
 
-Run `python upload.py` after a build. It reads the tokens from `~/stewbeet/credentials.yml`.
+Run `uv run python upload.py` after a build. It reads the tokens from `~/stewbeet/credentials.yml`.
 
 # 📄 License
 

@@ -1,6 +1,8 @@
 # Build output
 build/
 definitions_debug.json
+.beet_cache/
+*.mcfunction.map
 
 # Python
 __pycache__/

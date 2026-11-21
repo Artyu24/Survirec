@@ -1,2 +1,0 @@
-$execute as @e[distance=..1.6,tag=!survirec.m,tag=!smithed.strict,type=!minecraft:player,type=!minecraft:item,type=!minecraft:experience_orb,type=!minecraft:marker] run damage @s $(d) minecraft:mob_attack by @e[tag=survirec.hitter,limit=1]
-$execute if score @e[tag=survirec.hitter,limit=1] survirec.hitp matches 1 as @a[distance=..1.6,gamemode=!spectator] run damage @s $(d) minecraft:mob_attack by @e[tag=survirec.hitter,limit=1]

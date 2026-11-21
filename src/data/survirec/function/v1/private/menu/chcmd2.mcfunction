@@ -1,4 +1,0 @@
-tellraw @s {text:"------------------------------------------------",color:"dark_gray"}
-$tellraw @s [{text:"[Survirec] ",color:"gray"},{text:"Épreuve ",color:"green"},{text:"$(id)",color:"gold"},{text:" · $(time) s · groupe ",color:"green"},{text:"$(group)",color:"gold"}]
-$tellraw @s [{text:"[Survirec] ",color:"gray"},{text:"[Copier la commande]",color:"yellow",bold:true,click_event:{action:"copy_to_clipboard",value:'execute as @p run function #survirec:v1/challenge {with:{id:"$(id)",time:$(time),group:"$(group)",sync:$(sync),tp_back:$(tp_back)}}'},hover_event:{action:"show_text",value:"Colle-la dans un command block impulsion, derrière un bouton ou une plaque"}},{text:"  → command block ",color:"gray"},{text:"impulsion",color:"gold"}]
-tellraw @s {text:"------------------------------------------------",color:"dark_gray"}

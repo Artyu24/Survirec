@@ -1,13 +1,15 @@
+
 # Project identifier used for namespacing functions and tags. Should align with the namespace in the source folder.
 id: "survirec"
 # Project name that will be used in messages, item lore, etc.
 name: "Survirec"
-# Author(s) name(s) displayed in pack.mcmeta, also used to add 'convention.debug' tag to the players of the same name(s) <-- showing additionnal displays like datapack loading
+# Pack description for pack.mcmeta. Defaults to "{name} [{version}] by {author}" if empty.
+description: "Record player movements and replay them with mannequins"
+# Author(s) name(s) displayed in pack.mcmeta, also used to add 'convention.debug' tag to the players of the same name(s)
 author: "Artyu24"
 # Project version in semantic versioning format: major.minor.patch (e.g., 1.0.0 or 2.84.615).
-version: "1.0.0"
-# Short description of the project, used in pack.mcmeta
-description: "Record player movements and replay them with mannequins"
+# Every function is generated under survirec:v<version>/, the public function tags stay #survirec:v<major>/...
+version: "1.1.0"
 # Minecraft version. Determines what resources beet loads (plugins like `mecha` determine what commands to use). Defaults: Latest
 minecraft: "26.2"
 
@@ -15,46 +17,40 @@ minecraft: "26.2"
 directory: "."
 # Path to a folder for beet to output. If not defined, no files will visibly output
 output: "build"
+# List of files or glob patterns that should be ignored by the file watcher and not cause any rebuild when using `$ beet watch`
+ignore: ["build"]
+
+# A list of importable plugin strings
+require:
+    - "stewbeet"
+    - "beet.contrib.worldgen" # survirec:vault dimension
 
 # Takes a nested pack config, see PackConfig() documentation
 data_pack:
     name: "datapack"
-    # Hand-written datapack files (functions, function tags, advancement) of the library
-    load: ["src"]
-
-# Takes a nested pack config, see PackConfig() documentation
-resource_pack:
-    name: resource_pack
 
 # A list of strings or dicts representing "plugins".
 pipeline:
-    - "stewbeet.plugins.initialize"
     - "stewbeet.plugins.datapack.loading"
-    - "user.link" # User code
+    - "user.link" # User code: every file of the library
     - "stewbeet.plugins.finalyze.basic_datapack_structure"
-    - "stewbeet.plugins.finalyze.dependencies"
+    - "stewbeet.plugins.finalyze.dependencies" # Detects the #bs.block: calls (Bookshelf Block)
     - "stewbeet.plugins.finalyze.unload"
     - "stewbeet.plugins.finalyze.last_final"
+    - "stewbeet.plugins.auto.scoreboard_constants" # Sets every #<n> survirec.data constant in the load
     - "stewbeet.plugins.auto.headers"
     - "stewbeet.plugins.archive"
+    - "stewbeet.plugins.merge_smithed_weld.datapack" # Survirec_datapack_with_libs.zip, Bookshelf Block included
     - "stewbeet.plugins.copy_to_destination"
     - "stewbeet.plugins.compute_sha1"
 
 # Generic dict which holds extra information usable by plugins
 meta:
-    # List of supported Minecraft versions
+    # List of supported Minecraft versions (used when uploading to Modrinth or Smithed)
     mc_supports: ["26.2"]
 
     # StewBeet specific configuration
     stewbeet:
-        # Directory containing all project textures
-        textures_folder: "assets/textures"
-        # Directory containing all custom sounds
-        sounds_folder: "assets/sounds"
-        # Path where definitions debug information will be dumped
-        definitions_debug: "definitions_debug.json"
-        # No custom items in this library: skip the <id>:items storage
-        items_storage: false
         # Optional list of destination paths where generated files will be copied (uncomment and edit)
         # build_copy_destinations:
         #     # Paths to copy the datapack(s) to
