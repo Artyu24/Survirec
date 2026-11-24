@@ -117,7 +117,7 @@ execute unless entity @s[type=minecraft:player] run return fail
 execute if entity @s[tag={ns}.recording] run return 0
 execute if entity @s[tag={ns}.armed] run return 0
 {copies}execute store result score @s {ns}.challenge_ticks run data get storage {challenge} time 20
-execute unless score @s {ns}.challenge_ticks matches 20.. run return run tellraw @s {text("[Survirec] time doit être d'au moins 1 seconde.", "red")}
+execute unless score @s {ns}.challenge_ticks matches 20.. run return run {info("time doit être d'au moins 1 seconde.", "red")}
 execute unless score @s {ns}.player_id matches 1.. run function {functions}/player/new_id
 execute store result storage {challenge} player_id int 1 run scoreboard players get @s {ns}.player_id
 function {functions}/challenge/resolve_group with storage {challenge}

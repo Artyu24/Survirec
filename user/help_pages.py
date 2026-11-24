@@ -11,23 +11,24 @@ PAGES: tuple[str, ...] = ("Enregistrer", "Lancer", "Champs", "Épreuve", "Gérer
 
 PLAYBACK_HELP: tuple[tuple[str, str], ...] = (
 	("pos", "où ça apparaît, relatif possible (~ ~ ~ = centre du bloc)"),
-	("entity", "mannequin, cat..."),
+	("entity", "mannequin, zombie, item_display..."),
+	("nbt", "NBT appliqués à l'apparition, ex : {Glowing:1b} (sauf Tags)"),
 	("size", "taille (1 = normale)"),
 	("loop", "1 boucle · 0 fige · 2 disparaît"),
 	("redstone", "1 = bloc de redstone 2 blocs au-dessus du command block à chaque fin de boucle"),
 	("restore", "monde remis en état : 1 à chaque boucle · 2 aussi à la fin · 0 jamais"),
-	("hit_players", "1 = ses coups touchent aussi les joueurs"),
 	("speed", "100 = normal"),
 	("delay", "décalage de départ (ticks)"),
 	("range", "arrêt si aucun joueur à X blocs (0 = défaut)"),
 	("tag", "remplace l'ancien (unique dans tout le monde)"),
 	("group", "synchronise avec le groupe"),
 	("group_radius", "distance de regroupement (50 blocs)"),
-	("pose", "pose forcée"),
-	("skin", "pseudo d'un joueur"),
-	("texture", "texture base64 (si skin vide)"),
-	("head chest legs feet", "armure"),
-	("mainhand offhand", "mains"),
+	("hit_players", "1 = ses coups touchent aussi les joueurs (mannequin, mob)"),
+	("pose", "pose forcée (mannequin)"),
+	("skin", "pseudo d'un joueur (mannequin)"),
+	("texture", "texture base64 si skin vide (mannequin)"),
+	("head chest legs feet", "armure (mannequin, mob)"),
+	("mainhand offhand", "mains (mannequin, mob)"),
 )
 """ Page 3: playback fields. """
 
@@ -110,7 +111,7 @@ def main() -> None:
 			line(("Arrêt : ", "gray"), ("clic droit avec la barrière", "red")),
 		], [copy_button("Copier l'exemple", start_example)]),
 		([
-			line(("1. Clique sur ", "gray"), ("[Copier 1]", "yellow"), (" à la fin de l'enregistrement", "gray")),
+			line(("1. À la fin de l'enregistrement, clique sur ", "gray"), ("[Copier]", "yellow"), (" de l'entité voulue", "gray")),
 			line(("2. Colle-la dans un command block ", "gray"), ("impulsion", "gold")),
 			line(("3. Active le bloc", "gray")),
 			line(("Les champs à modifier sont ", "gray"), ("au début", "gold"), (" de la commande", "gray")),

@@ -103,7 +103,7 @@ function {functions}/spawn/init_start
 scoreboard players set @s {ns}.restart_pending 0
 {has_lists}function {functions}/spawn/read_sequence with storage {call} spawn
 {clamp_lists}{setting("restore_mode", "restore", 1)}{setting("hit_players", "hit_players", 0)}scoreboard players set @s {ns}.next_release_tick -1
-{setting("redstone", "redstone", 0)}{command_block}{start_block}function {functions}/spawn/set_size with storage {call} spawn
+{setting("redstone", "redstone", 0)}{command_block}{start_block}execute unless entity @s[type=#{ns}:displays] run function {functions}/spawn/set_size with storage {call} spawn
 execute unless score @s {ns}.keyframe_ticks matches 1.. run scoreboard players set @s {ns}.keyframe_count 0
 scoreboard players operation @s {ns}.keyframe_divisor = @s {ns}.keyframe_ticks
 execute store result score @s {ns}.loop_mode run data get storage {call} spawn.loop
@@ -133,7 +133,26 @@ data remove storage {call} profile
 execute if entity @s[type=minecraft:mannequin] unless data storage {call} spawn{{skin:""}} run function {functions}/spawn/set_skin with storage {call} spawn
 execute if entity @s[type=minecraft:mannequin] if data storage {call} spawn{{skin:""}} unless data storage {call} spawn{{texture:""}} run function {functions}/spawn/set_texture with storage {call} spawn
 execute unless data storage {call} spawn{{pose:""}} run function {functions}/spawn/force_pose with storage {call} spawn
+execute if entity @s[type=#{ns}:displays] run function {functions}/spawn/init_display
+# the nbt field comes last so it wins, but never over the tags that make the entity a playback entity
+data remove storage {call} spawn.nbt.Tags
+scoreboard players set #nbt_key_count {ns}.data 0
+execute store result score #nbt_key_count {ns}.data run data get storage {call} spawn.nbt
+execute if score #nbt_key_count {ns}.data matches 1.. run function {functions}/spawn/merge_nbt with storage {call} spawn
 """)
+
+	write_versioned_function("spawn/init_display", f"""
+# the client does not smooth a display: it glides over the ticks until its next move. A block display is drawn from its corner
+execute store result storage {call} spawn.teleport_duration int 1 run scoreboard players get #move_every {ns}.data
+execute store result storage {call} spawn.display_offset float -0.0005 run data get storage {call} spawn.size 1000
+execute unless entity @s[type=minecraft:block_display] run data modify storage {call} spawn.display_offset set value 0f
+function {functions}/spawn/set_display_transformation with storage {call} spawn
+""")
+	write_versioned_function("spawn/set_display_transformation", (
+		"$data merge entity @s {teleport_duration:$(teleport_duration),transformation:{left_rotation:[0f,0f,0f,1f],right_rotation:[0f,0f,0f,1f],"
+		"translation:[$(display_offset)f,0f,$(display_offset)f],scale:[$(size)f,$(size)f,$(size)f]}}"
+	))
+	write_versioned_function("spawn/merge_nbt", "$data merge entity @s $(nbt)")
 
 	timed_lists: str = ""
 	for timed_list in TIMED_LISTS:

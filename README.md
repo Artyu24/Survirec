@@ -1,12 +1,12 @@
 # 🎬 Survirec
 
-A vanilla datapack library that **records a player's movements and replays them with a mannequin** (or any other living entity).
+A vanilla datapack library that **records a player's movements and replays them with a mannequin** (or any other entity: a mob, or an item, block or text display).
 No mods, no resource pack: only commands.
 
 - 🎥 Records walking, sprinting, jumping, sneaking, swimming, elytra flight, equipment changes and arm swings.
 - 🧱 Records **actions** too: hitting entities, pressing buttons and levers, opening doors, trapdoors and fence gates, placing and breaking blocks. The world can be put back as it was at every loop.
 - 🔁 Replays the movement in a loop, interpolated between keyframes (one keyframe every `N` ticks, so sequences stay small).
-- 🧍 Mannequin by default, but any living entity works. Per-playback skin, texture, size, speed, delay, pose and equipment overrides.
+- 🧍 Mannequin by default, but any mob or display entity works. Per-playback skin, texture, size, speed, delay, pose and equipment overrides.
 - 📋 The sequence is copied into **one command block command** (long ones are split in a command block chain): no file to move around.
 - 🏁 **Challenge mode**: a player (even in adventure) is recorded for `X` seconds, then a double with their skin replays the run in a loop. Several recordings can be synchronized in a group.
 - ⚡ Cheap playback: scores and one `tp` macro per entity and tick. Stationary entities are not teleported, and entities with no player nearby are paused.
@@ -88,28 +88,38 @@ The item is a camera head ([minecraft-heads.com](https://minecraft-heads.com), C
 ## Playback fields
 
 The command copied after a recording starts with these fields. Edit them before running the command block.
+Its last command block has one copy button per kind of entity, holding only the fields that entity uses: **Mannequin**, **Mob** (`minecraft:zombie`, to replace with the mob you want), **Objet** (`item_display`), **Bloc** (`block_display`) and **Texte** (`text_display`). Every field still works in any command: a missing field takes its default.
 
 | Field                                  | Meaning                                                                 |
 | -------------------------------------- | ----------------------------------------------------------------------- |
 | `name`                                 | Sequence name (letters, digits, `_`)                                    |
 | `pos`                                  | Where the entity appears. Default: where you started recording. `"~ ~ ~"` is the **center** of the command block, `"~ ~-0.5 ~"` the floor it stands on |
-| `entity`                               | `minecraft:mannequin` (default) or any living entity                    |
-| `size`                                 | Scale. `1` normal, `0.5` half, `2` double                               |
+| `entity`                               | `minecraft:mannequin` (default), any mob, or `minecraft:item_display`, `block_display`, `text_display` |
+| `nbt`                                  | Entity NBT merged when it appears, as in a `/summon`: `{IsBaby:1b}`, `{Glowing:1b}`, `{item:{id:"minecraft:diamond_sword"}}`... Merged last, so it wins over the other fields, except `Tags` which is ignored. Default `{}` |
+| `size`                                 | Scale. `1` normal, `0.5` half, `2` double (`transformation` on a display) |
 | `loop`                                 | `1` loop, `0` play once and stay, `2` play once and disappear (no death animation, nothing dropped) |
 | `redstone`                             | `1`: at the end of every loop, a redstone block is placed 2 blocks above the command block that started the playback (one block gap, so it does not power the launching command block again), and removed 4 ticks later (a pulse, so a command block placed right next to it fires every time). Nothing is placed if that spot is not empty. With a `group`, at the end of every group cycle. Default `0` |
 | `restore`                              | World restoring: `1` at every new loop (default), `2` also when the entity ends (`loop` 0 or 2), `0` never. `kill` restores too unless `0` |
-| `hit_players`                          | `1`: the entity's hits also damage players (default `0`)                 |
+| `hit_players`                          | `1`: the entity's hits also damage players (default `0`). Mannequin and mobs |
 | `speed`                                | Percent. `100` normal                                                   |
 | `delay`                                | Start delay in ticks, to desynchronize several entities                 |
 | `range`                                | Pause distance in blocks for this playback: the entity only moves while a player is within `range` blocks of it. `0` (default) uses the global range (`#survirec:v1/range`, 128 by default) |
 | `tag`                                  | Triggering the block again replaces the entity with this tag. The tag is global to the world: use a unique one per build, otherwise two copies of a build erase each other's entities |
 | `group`                                | Group name. Entities of the same group start and finish together (see below). `loop` then applies to the whole group |
 | `group_radius`                         | Distance (blocks, default `50`) within which an entity joins an existing group of the same name |
-| `pose`                                 | Empty keeps the recorded poses. Otherwise forced: `standing`, `crouching`, `swimming`, `sleeping`, `fall_flying` |
+| `pose`                                 | Mannequin only. Empty keeps the recorded poses. Otherwise forced: `standing`, `crouching`, `swimming`, `sleeping`, `fall_flying` |
 | `skin`                                 | Player name (mannequin only)                                            |
-| `texture`                              | Base64 `textures` property value, used if `skin` is empty               |
-| `head` `chest` `legs` `feet` `mainhand` `offhand` | Item overrides. Empty keeps the recorded equipment            |
+| `texture`                              | Base64 `textures` property value, used if `skin` is empty (mannequin only) |
+| `head` `chest` `legs` `feet` `mainhand` `offhand` | Item overrides. Empty keeps the recorded equipment. Mannequin and mobs |
 | `data`                                 | The recorded sequence (`f`, `n`, `y`, `p`, `d`, `e`, `s`, `a`). Do not edit |
+
+### Display entities
+
+An `item_display`, `block_display` or `text_display` shows what its `nbt` says (`item`, `block_state`, `text`). Survirec also sets, before merging `nbt`:
+- `teleport_duration` to `move_every`, so the display glides between two moves like a mob.
+- `transformation` from `size`, and for a `block_display` a translation that centers the block on its position.
+
+A `transformation` in `nbt` replaces these. Displays follow the recorded rotation, pitch included, unless their `billboard` says otherwise; swings, poses and equipment do nothing on them.
 
 ## Challenge groups
 

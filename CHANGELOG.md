@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0
+- Added: the end of an export offers one copy of the playback command per kind of entity (mannequin, mob, item, block and text display), each with only the fields that entity uses.
+- Added: `nbt` playback field, entity NBT merged when the entity appears (`Tags` excepted).
+- Added: display entities (`item_display`, `block_display`, `text_display`) glide between moves, take `size` through their `transformation`, and a block display is centered on its position.
+- Changed: chat messages start with a camera emoji instead of `[Survirec]`, shorter lines.
+- Changed (performance): a recording reads the player position and rotation on a marker instead of the player itself, which no longer serializes the player 5 times per keyframe.
+
 ## 1.2.0
 - Changed: the in-game help opens in dialogs instead of the chat: an index and one page per topic, with copy buttons and previous / next. The menu opens it directly.
 - Fixed: in the help, only the explained word is bold, not its whole description.

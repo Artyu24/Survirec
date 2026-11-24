@@ -30,7 +30,7 @@ Librairie datapack vanilla **Minecraft Java 26.2** (Smithed + StewBeet, auteur *
 - `resources.py` : dimension `survirec:vault`, tags de blocs, tags de dégâts (`WEAPON_DAMAGE`), advancements. `dialogs.py` : menu, formulaires, convention Smithed Data Pack Menu Dialog.
 - Dimension cachée `survirec:vault` : chunk 0 = blocs seuls (libres dans `survirec:config free_block_slots`), chunk 1 = cubes 3x3x3 d'enregistrement (`free_cube_slots`), chunk 2 = cubes de regard par joueur, case 15 319 15 = case de travail.
 - `common.py` : fragments partagés, à utiliser au lieu de les réécrire (`AXES`, `DIMENSIONS`, `Storages`, `wrap_yaw()`, `store_position()`, `kill_tagged()`, `build_sequence()`, `check_group_alive()`, `timer()`, et le texte de chat `text()`, `say()`, `info()`, `run()`, `copy()`, `SEPARATOR`). `copy()` met toujours la commande entre guillemets simples (les macros y injectent des guillemets doubles).
-- Un bloc qui se répète se génère par une boucle `content += f"""..."""`, jamais par `"\n".join`. Les champs publics de `play` sont définis une seule fois (`PLAYBACK_FIELDS`).
+- Un bloc qui se répète se génère par une boucle `content += f"""..."""`, jamais par `"\n".join`. Les champs publics de `play` sont définis une seule fois (`PLAYBACK_FIELDS`), et les copies par type d'entité dans `PLAYBACK_PROFILES` (`user/common.py`).
 
 ## Build
 Python 3.14 + uv : `uv run stewbeet` (sortie dans `build/`, `Survirec_datapack_with_libs.zip` contient Bookshelf Block). `uv run stewbeet watch` pour reconstruire à chaque modification.

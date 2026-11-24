@@ -2,7 +2,7 @@
 # Imports
 from beet import ProjectConfig
 from stewbeet import JsonDict
-from stewbeet.continuous_delivery import load_credentials, upload_to_github, upload_to_modrinth, upload_to_smithed
+from stewbeet.continuous_delivery import load_credentials, upload_to_modrinth, upload_to_smithed
 from stewbeet.utils import get_project_config
 from stouputils.io import read_file
 
@@ -11,15 +11,11 @@ credentials: dict[str, str] = load_credentials("~/stewbeet/credentials.yml")
 cfg: ProjectConfig = get_project_config()
 
 
+# The GitHub release is made by hand: the changelog is the section of this version in CHANGELOG.md
+changelog: str = read_file(f"{cfg.directory}/CHANGELOG.md").split(f"## {cfg.version}\n", 1)[1].split("\n## ", 1)[0].strip()
+
+
 ## Uploads
-# Upload to GitHub
-github_config: JsonDict = {
-    "project_name": cfg.name.replace(" ", ""),
-    "version": cfg.version,
-    "build_folder": cfg.output,
-    "endswith": [".zip", ".jar"]
-}
-changelog: str = upload_to_github(credentials, github_config)
 
 # Upload to Modrinth
 modrinth_config: JsonDict = {

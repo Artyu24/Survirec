@@ -1,6 +1,6 @@
 """ Everything that is not a function: the hidden dimension, block and item tags, advancements. """
 # Imports
-from beet import Advancement, BlockTag, ItemTag
+from beet import Advancement, BlockTag, EntityTypeTag, ItemTag
 from beet.contrib.worldgen import Dimension
 from stewbeet import Mem, set_json_encoder, write_versioned_function
 from stouputils.typing import JsonDict
@@ -80,6 +80,9 @@ def main() -> None:
 		"#minecraft:buttons", "minecraft:lever", f"#{ns}:doors_open", f"#{ns}:trapdoors_open", "#minecraft:fence_gates",
 	]}))
 	data[ns].block_tags["ray_pass"] = set_json_encoder(BlockTag({"values": [*RAY_PASS, {"id": "minecraft:light", "required": False}]}))
+
+	# Playback entities moved and sized their own way
+	data[ns].entity_type_tags["displays"] = set_json_encoder(EntityTypeTag({"values": ["minecraft:item_display", "minecraft:block_display", "minecraft:text_display"]}))
 
 	# Damage of the hits played back, read from the held item
 	for damage, items in WEAPON_DAMAGE.items():

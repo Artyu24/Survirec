@@ -52,7 +52,7 @@ function {functions}/challenge/start
 		return f'{{score:{{name:"{holder}",objective:"{ns}.{objective}"}},color:"{color}"{"," + extra if extra else ""}}}'
 	write_versioned_function("debug/show", f"""
 tag @s add {ns}.debug_viewer
-tellraw @s {text("[Survirec] diagnostic", "gold", "bold:true")}
+{say(text("diagnostic", "gold", "bold:true"))}
 execute store result score #debug_recording {ns}.data if entity @a[tag={ns}.recording]
 execute store result score #debug_armed {ns}.data if entity @a[tag={ns}.armed]
 tellraw @s [{text("  Enregistrements : ", "gray")},{score("#debug_recording", "data")},{text("   armés : ", "gray")},{score("#debug_armed", "data")}]
@@ -155,7 +155,7 @@ kill @e[type=minecraft:marker,tag={ns}.recorder_marker]
 execute as @e[type=minecraft:marker,tag={ns}.pulse_marker] at @s run function {functions}/pulse/stop
 scoreboard players set #pulse_count {ns}.data 0
 data remove storage {ns}:in_progress players
-tellraw @s {text("[Survirec] État réinitialisé.", "green")}
+{info("État réinitialisé.")}
 """)
 
 	## Recordings started and stopped by the entry points
@@ -164,7 +164,7 @@ execute unless entity @s[type=minecraft:player] run return fail
 execute if entity @s[tag={ns}.recording] run return run {say(text("Tu es déjà en train d'enregistrer (", "red"), text(f"{api}/stop", "gold"), text(").", "red"))}
 execute if entity @s[tag={ns}.armed] run return run {say(text("Ton enregistrement est déjà armé (", "red"), text(f"{api}/abort", "gold"), text(" pour l'annuler).", "red"))}
 $scoreboard players set #keyframe_step {ns}.data $(every)
-execute unless score #keyframe_step {ns}.data matches 1..100 run return run tellraw @s {text("[Survirec] every doit être entre 1 et 100.", "red")}
+execute unless score #keyframe_step {ns}.data matches 1..100 run return run {info("every doit être entre 1 et 100.", "red")}
 $data modify storage {storage.recording} meta set value {{name:"$(name)",keyframe_step:$(every),group:"$(group)",group_radius:$(group_radius)}}
 execute if data storage {call} options{{group:""}} run return run function {functions}/record/begin
 function {functions}/record/arm_with_nearest_group with storage {call} options

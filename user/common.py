@@ -13,7 +13,7 @@ TELEPORT_SCALES: dict[str, str] = {"x": "0.001", "y": "0.001", "z": "0.001", "ya
 """ Dimension -> scale back to blocks or degrees, for the macro arguments of playback/teleport. """
 
 PLAYBACK_FIELDS: dict[str, str] = {
-	"name": '""', "pos": '"~ ~ ~"', "entity": '"minecraft:mannequin"', "range": "0", "size": "1", "loop": "1",
+	"name": '""', "pos": '"~ ~ ~"', "entity": '"minecraft:mannequin"', "nbt": "{}", "range": "0", "size": "1", "loop": "1",
 	"redstone": "0", "restore": "1", "hit_players": "0", "speed": "100", "delay": "0", "tag": '""', "group": '""', "group_radius": "50",
 	"pose": '""', "skin": '""', "texture": '""', "head": '""', "chest": '""', "legs": '""', "feet": '""', "mainhand": '""', "offhand": '""',
 }
@@ -23,6 +23,46 @@ EQUIPMENT_FIELDS: dict[str, str] = {
 	"head": "armor.head", "chest": "armor.chest", "legs": "armor.legs", "feet": "armor.feet", "mainhand": "weapon.mainhand", "offhand": "weapon.offhand",
 }
 """ Equipment playback field -> slot of the entity. """
+
+SHARED_PLAYBACK_FIELDS: tuple[str, ...] = (
+	"name", "pos", "entity", "nbt", "range", "size", "loop", "redstone", "restore", "speed", "delay", "tag", "group", "group_radius",
+)
+""" Playback fields that work whatever the entity. """
+
+
+@dataclass(frozen=True, slots=True)
+class PlaybackProfile:
+	""" A kind of playback entity: its own copy of the playback command, with only the fields it uses. """
+
+	label: str
+	""" Name on its copy button. """
+
+	entity: str
+	""" Value of the entity field (SNBT). """
+
+	nbt: str
+	""" Example value of the nbt field (SNBT), without single quotes: the copy button puts the command between them. """
+
+	hint: str = ""
+	""" Gray text after the copy button. """
+
+	own_fields: tuple[str, ...] = ()
+	""" Fields used on top of SHARED_PLAYBACK_FIELDS. """
+
+	def fields(self) -> dict[str, str]:
+		""" Its fields and their defaults (SNBT), in the order of PLAYBACK_FIELDS. """
+		kept: dict[str, str] = {field: value for field, value in PLAYBACK_FIELDS.items() if field in SHARED_PLAYBACK_FIELDS or field in self.own_fields}
+		return {**kept, "entity": self.entity, "nbt": self.nbt}
+
+
+PLAYBACK_PROFILES: tuple[PlaybackProfile, ...] = (
+	PlaybackProfile("Mannequin", '"minecraft:mannequin"', "{}", own_fields=("hit_players", "pose", "skin", "texture", *EQUIPMENT_FIELDS)),
+	PlaybackProfile("Mob", '"minecraft:zombie"', "{}", own_fields=("hit_players", *EQUIPMENT_FIELDS)),
+	PlaybackProfile("Objet", '"minecraft:item_display"', '{item:{id:"minecraft:diamond_sword"}}', hint="item_display"),
+	PlaybackProfile("Bloc", '"minecraft:block_display"', '{block_state:{Name:"minecraft:stone"}}', hint="block_display"),
+	PlaybackProfile("Texte", '"minecraft:text_display"', '{text:"Bonjour",billboard:"center"}', hint="text_display"),
+)
+""" Playback command copies offered at the end of an export, one per kind of entity. """
 
 ARMED: str = "Enregistrement armé : il démarre au prochain cycle du groupe."
 NOT_RECORDING: str = "Tu n'as aucun enregistrement en cours."
@@ -157,7 +197,7 @@ def copy(label: str, value: str, hover: str = "", color: str = "yellow", extra: 
 	return text(label, color, ",".join(field for field in (extra, click, tooltip(hover or value, always_single_quotes=not hover)) if field))
 
 
-PREFIX: str = text("[Survirec] ", "gray")
+PREFIX: str = text("🎥 ")
 """ Start of every chat message of the library. """
 
 SEPARATOR: str = f"tellraw @s {text('-' * 48, 'dark_gray')}"

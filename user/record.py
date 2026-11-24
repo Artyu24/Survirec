@@ -9,7 +9,7 @@ from .common import (
 	ARMED,
 	AXES,
 	DIMENSIONS,
-	PLAYBACK_FIELDS,
+	PLAYBACK_PROFILES,
 	SEPARATOR,
 	Storages,
 	build_sequence,
@@ -72,12 +72,11 @@ def main() -> None:
 	remove_start_marker: str = f"""scoreboard players operation #player_id {ns}.data = @s {ns}.player_id
 execute as @e[type=minecraft:text_display,tag={ns}.start_marker] if score @s {ns}.player_id = #player_id {ns}.data run kill @s"""
 
+	block_kind: tuple[str, str] = (text("command block $(block_number) · ", "gray"), text("$(block_kind)", "$(block_color)"))
+
 	def copy_block(value: str, suffix: str = "") -> str:
 		""" Copy button of command block $(block_number) of an export (macro line). """
-		parts: list[str] = [
-			copy("[Copier $(block_number)]", value, COPY_HOVER, extra="bold:true"),
-			text("  -> command block $(block_number) · ", "gray"), text("$(block_kind)", "$(block_color)"),
-		]
+		parts: list[str] = [copy("[Copier $(block_number)]", value, COPY_HOVER, extra="bold:true"), text("  -> ", "gray"), *block_kind]
 		if suffix:
 			parts.append(text(suffix, "gray"))
 		return "$" + say(*parts)
@@ -335,11 +334,16 @@ data remove storage {recording} chunks[0]
 {empty_events}{unsplit_events}function {functions}/record/show_playback_button with storage {recording} export
 """)
 
-	exported: dict[str, str] = {
-		**PLAYBACK_FIELDS, "name": '"$(name)"', "pos": '"$(start_x) $(start_y) $(start_z)"', "group": '"$(group)"', "group_radius": "$(group_radius)",
+	recorded: dict[str, str] = {
+		"name": '"$(name)"', "pos": '"$(start_x) $(start_y) $(start_z)"', "group": '"$(group)"', "group_radius": "$(group_radius)",
 		"data": "{f:$(is_first),n:$(keyframe_step),y:$(yaw),p:$(pitch),d:$(keyframes),e:$(equipment),s:$(swings),a:$(actions)}",
 	}
-	write_versioned_function("record/show_playback_button", copy_block(f"function {api}/play {{with:{compound(exported)}}}", " · lecture"))
+	playback_buttons: str = "$" + say(*block_kind, text(" · lecture, choisis l'entité qui rejoue :", "gray")) + "\n"
+	for profile in PLAYBACK_PROFILES:
+		command: str = f"function {api}/play {{with:{compound({**profile.fields(), **recorded})}}}"
+		button: str = copy(f"[Copier $(block_number) · {profile.label}]", command, COPY_HOVER, extra="bold:true")
+		playback_buttons += "$" + (say(button, text(f"  {profile.hint}", "gray")) if profile.hint else say(button)) + "\n"
+	write_versioned_function("record/show_playback_button", playback_buttons)
 	write_versioned_function("record/show_part_button", copy_block(f"function {api}/part {{with:{{f:$(is_first),d:$(keyframes)}}}}"))
 
 	write_versioned_function("record/export", f"""
@@ -376,7 +380,7 @@ function {functions}/record/pull_state
 function {functions}/record/drop_state with storage {storage.recorder}
 function {functions}/record/cleanup
 function {api}/signals/on_record_stop
-execute if score #keyframe_count {ns}.data matches 0 run return run tellraw @s {text("[Survirec] Séquence vide, rien à exporter.", "red")}
+execute if score #keyframe_count {ns}.data matches 0 run return run {info("Séquence vide, rien à exporter.", "red")}
 execute if score #chunk_keyframes {ns}.data matches 1.. run data modify storage {recording} chunks append from storage {recording} d
 function {functions}/record/save
 function {functions}/record/export
@@ -402,10 +406,16 @@ scoreboard players operation #seconds {ns}.data = @s {ns}.record_tick
 {timer(ns, f'{text("● ", "red")},{text("ENREGISTREMENT EN COURS ", "white", "bold:true")}', 'color:"yellow"')}
 """)
 
-	start_position: str = ""
+	player_being_read: str = f"{ns}.position_being_read"
+	read_player_position: str = f"""# read on a marker in the place of the player: reading the player itself would serialize its whole inventory, 5 times
+tag @s add {player_being_read}
+execute at @s summon minecraft:marker run function {functions}/record/read_player_position
+tag @s remove {player_being_read}"""
+	previous: str = ""
+	for name in DIMENSIONS:
+		previous += f"scoreboard players operation @s {ns}.recorded_{name} = #current_{name} {ns}.data\n"
 	start_copies: str = ""
-	for index, axis in enumerate(AXES):
-		start_position += f"execute store result score @s {ns}.recorded_{axis} run data get entity @s Pos[{index}] 1000\n"
+	for axis in AXES:
 		start_copies += f"execute store result storage {recording} meta.start_{axis} double 0.001 run scoreboard players get @s {ns}.recorded_{axis}\n"
 	origin: str = ""
 	for name in DIMENSIONS:
@@ -422,9 +432,8 @@ scoreboard players set @s {ns}.recorded_keyframes 0
 scoreboard players set @s {ns}.ticks_since_keyframe 0
 scoreboard players set @s {ns}.record_tick 0
 scoreboard players set @s {ns}.last_swing_tick -1
-{start_position}execute store result score @s {ns}.recorded_yaw run data get entity @s Rotation[0] 100
-execute store result score @s {ns}.recorded_pitch run data get entity @s Rotation[1] 100
-{origin}execute store result storage {recording} meta.yaw int 1 run scoreboard players get @s {ns}.recorded_yaw
+{read_player_position}
+{previous}{origin}execute store result storage {recording} meta.yaw int 1 run scoreboard players get @s {ns}.recorded_yaw
 execute store result storage {recording} meta.pitch int 1 run scoreboard players get @s {ns}.recorded_pitch
 {start_copies}function {functions}/record/init_state with storage {storage.recorder}
 function {functions}/record/init_actions
@@ -479,14 +488,16 @@ scoreboard players operation #delta_{name} {ns}.data -= @s {ns}.recorded_{name}
 """
 		if name == "yaw":
 			deltas += wrap_yaw(f"#delta_yaw {ns}.data") + "\n"
-	previous: str = ""
-	for name in DIMENSIONS:
-		previous += f"scoreboard players operation @s {ns}.recorded_{name} = #current_{name} {ns}.data\n"
 	write_versioned_function("record/capture_keyframe", f"""
 scoreboard players set @s {ns}.ticks_since_keyframe 0
+{read_player_position}
+{deltas}{previous}function {functions}/record/append_keyframe
+""")
+	write_versioned_function("record/read_player_position", f"""
+tp @s @a[tag={player_being_read},limit=1]
 {current}execute store result score #current_yaw {ns}.data run data get entity @s Rotation[0] 100
 execute store result score #current_pitch {ns}.data run data get entity @s Rotation[1] 100
-{deltas}{previous}function {functions}/record/append_keyframe
+kill @s
 """)
 
 	write_versioned_function("record/kill_markers", f"execute as @e[type=minecraft:marker,tag={ns}.recorder_marker] if score @s {ns}.player_id = #player_id {ns}.data run kill @s")
